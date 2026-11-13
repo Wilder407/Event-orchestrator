@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Event Cascade Agent</title>
+<style>
+  :root { --ink:#1a1a1a; --muted:#6b6b6b; --line:#e3e1dc; --bg:#f7f6f3; --card:#fff;
+          --accent:#e8943a; --accent-bg:#fdf1e3; --warn:#b3261e; --flag-line:#e6c200; --flag-bg:#fffbe0; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.45 -apple-system, "Segoe UI", sans-serif; color:var(--ink); background:var(--bg); }
+  button { font:inherit; border:1px solid var(--line); background:var(--card); border-radius:7px; padding:5px 12px; cursor:pointer; }
+  button:hover { border-color:var(--ink); }
+  button.primary { background:var(--ink); color:#fff; border-color:var(--ink); }
+  button:disabled { opacity:.5; cursor:default; }
+
+  /* top: title, tabs and the event facts window stay in view */
+  .top { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.05); }
+  header { padding:14px 24px 0; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:21px; margin:0; }
+  header .sub { color:var(--muted); flex:1; min-width:200px; }
+  nav { display:flex; gap:4px; padding:10px 24px 0; }
+  nav a { padding:7px 14px; border:1px solid var(--line); border-bottom:0; border-radius:8px 8px 0 0; color:var(--muted); text-decoration:none; background:var(--bg); }
+  nav a.on { color:var(--ink); background:var(--card); font-weight:600; position:relative; top:1px; }
+  .count { background:var(--flag-line); color:var(--ink); border-radius:10px; padding:0 7px; font-size:12px; font-weight:600; margin-left:4px; }
+  #facts-window { padding:12px 24px 14px; border-top:1px solid var(--line); max-height:42vh; overflow:auto; }
+  #facts-window h2 { margin-bottom:8px; }
+  #board { display:grid; grid-template-columns:repeat(auto-fill, minmax(165px, 1fr)); gap:6px 8px; }
+  .fact { border:1px solid var(--line); border-radius:7px; padding:5px 9px; min-width:0; }
+  .fact .k { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+  .fact .v { font-weight:600; overflow-wrap:anywhere; }
+  .fact .was { font-size:12px; color:var(--muted); }
+  .fact { cursor:pointer; }
+  .fact:hover { border-color:var(--ink); }
+  .fact input { font:inherit; font-weight:600; width:100%; border:1px solid var(--ink); border-radius:5px; padding:1px 5px; margin:0; }
+  .pick { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+  .card label.sel { display:flex; gap:8px; align-items:center; cursor:pointer; }
+  .fact.unknown .v { font-weight:400; color:var(--muted); }
+  .fact.changed { border-color:var(--flag-line); background:var(--flag-bg); }
+  .fact.pending { border-color:var(--accent); background:var(--accent-bg); }
+  @media (max-width:800px) { .top { position:static; } #facts-window { max-height:none; } }
+
+  main { padding:16px 24px 40px; }
+  .cols { display:grid; grid-template-columns:minmax(260px,1fr) minmax(360px,2fr); gap:16px; align-items:start; }
+  @media (max-width:800px) { .cols { grid-template-columns:1fr; } }
+  [hidden] { display:none !important; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:0 0 12px; }
+  h3 { font-size:14px; margin:18px 0 8px; }
+  .row { display:flex; gap:10px; align-items:center; padding:8px 0; border-top:1px solid var(--line); }
+  .row:first-child { border-top:0; }
+  .grow { flex:1; min-width:0; }
+  .muted { color:var(--muted); font-size:13px; }
+  .tag { font-size:11px; text-transform:uppercase; letter-spacing:.05em; border:1px solid var(--line); border-radius:4px; padding:1px 6px; color:var(--muted); white-space:nowrap; background:var(--card); }
+  .card { border:1px solid var(--accent); background:var(--accent-bg); border-radius:8px; padding:12px; margin-bottom:10px; }
+  .card.recheck { border-color:var(--flag-line); background:var(--flag-bg); }
+  .change { font-size:17px; font-weight:600; margin:2px 0 6px; }
+  .change s { color:var(--muted); font-weight:400; }
+  blockquote { margin:6px 0; padding-left:10px; border-left:3px solid var(--accent); color:#444; font-size:13.5px; }
+  .actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .reason { font-size:13.5px; margin:6px 0 0; white-space:pre-line; }
+  textarea, select, input[type=text] { font:inherit; width:100%; border:1px solid var(--line); border-radius:7px; padding:7px; margin-bottom:8px; }
+  textarea { min-height:90px; resize:vertical; }
+  details summary { cursor:pointer; font-weight:600; font-size:14px; margin:18px 0 8px; }
+  .task.done .title { text-decoration:line-through; color:var(--muted); }
+  .overdue { color:var(--warn); }
+  .notice { background:#fdecea; border:1px solid var(--warn); color:var(--warn); border-radius:8px; padding:10px 12px; margin-bottom:14px; }
+  #toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:8px; display:none; max-width:80vw; z-index:9; }
+  #toast.error { background:var(--warn); }
+  .empty { color:var(--muted); padding:6px 0; }
+</style>
+</head>
+<body>
+<div class="top">
+  <header>
+    <h1 id="event-name">Event Cascade Agent</h1>
+    <span class="sub" id="event-sub">One change in, every dependent task updated.</span>
+    <button id="reset">Reset demo</button>
+  </header>
+  <nav>
+    <a href="#updates" data-tab="updates">Updates</a>
+    <a href="#template" data-tab="template">Template <span id="template-count"></span></a>
+  </nav>
+  <div id="facts-window">
+    <h2>Event facts <span style="text-transform:none; letter-spacing:0; font-weight:400">· click a value to change it</span></h2>
+    <div id="board"></div>
+  </div>
+</div>
+
+<main>
+  <div id="notice"></div>
+
+  <div id="view-updates" class="cols">
+    <section>
+      <h2>Incoming</h2>
+      <div class="muted" style="margin-bottom:6px">New emails, call transcripts and contracts for the agent to read.</div>
+      <div id="incoming"></div>
+      <details>
+        <summary>Paste something else</summary>
+        <select id="kind"><option value="email">Email</option><option value="transcript">Meeting transcript</option><option value="contract">Contract / quote</option><option value="web">Venue web page</option></select>
+        <input type="text" id="sender" placeholder="From (optional)">
+        <textarea id="text" placeholder="Paste the text here"></textarea>
+        <button id="paste-btn" class="primary">Read it</button>
+      </details>
+      <h3>Already read</h3>
+      <div id="already"></div>
+    </section>
+
+    <section>
+      <h2>Changes and affected tasks</h2>
+      <div id="proposals"></div>
+      <div id="affected"></div>
+    </section>
+  </div>
+
+  <div id="view-template" hidden>
+    <section>
+      <h2>Template checklist</h2>
+      <div id="tasks"></div>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+let S = null;
+const unpicked = new Set();          // proposed changes the user has unticked
+
+function toast(msg, error) {
+  const t = $("toast"); t.textContent = msg; t.className = error ? "error" : ""; t.style.display = "block";
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.style.display = "none", error ? 8000 : 4000);
+}
+
+async function api(path, body) {
+  const res = await fetch(path, body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (data.error) { toast(data.error, true); return null; }
+  S = data; render(); return data;
+}
+
+function showTab() {
+  const tab = location.hash === "#template" ? "template" : "updates";
+  $("view-updates").hidden = tab !== "updates";
+  $("view-template").hidden = tab !== "template";
+  document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.dataset.tab === tab));
+}
+window.addEventListener("hashchange", showTab);
+
+// One look for a task that needs a re-check, used on both tabs.
+function recheckCard(t) {
+  const standard = !!t.template_id;
+  return `<div class="card recheck">
+      <span class="tag">${standard ? "Re-check" : "Added"}</span> <strong>${esc(t.title)}</strong>
+      <div class="muted">${esc(t.owner_role || "")}${t.due_display ? " · due " + esc(t.due_display) : ""}</div>
+      <p class="reason">${esc(t.flag_reason)}</p>
+      <div class="actions"><button class="primary" data-task="${t.id}" data-status="${standard ? "ok" : "done"}">${standard ? "Checked, still fine" : "Handled"}</button>
+        <button data-task="${t.id}" data-status="dismissed">Not relevant</button></div>
+    </div>`;
+}
+
+function render() {
+  const flagged = S.tasks.filter(t => t.status === "needs_recheck");
+  const known = S.board.filter(f => f.display).length;
+  $("event-name").textContent = S.event.name;
+  $("event-sub").textContent = `${S.event.type} · ${known} of ${S.board.length} facts known · ${plural(flagged.length, "task")} to re-check`;
+  $("template-count").innerHTML = flagged.length ? `<span class="count">${flagged.length}</span>` : "";
+  $("notice").innerHTML = S.notice ? `<div class="notice">${esc(S.notice)}</div>` : "";
+
+  $("board").innerHTML = S.board.map(f => `
+    <div class="fact ${f.pending ? "pending" : f.was ? "changed" : ""} ${f.display ? "" : "unknown"}" data-key="${esc(f.key)}" data-edit="${esc(f.edit)}" title="${esc(f.display ? `${f.source || ""}${f.quote ? ': "' + f.quote + '"' : ""}` : "")}">
+      <div class="k">${esc(f.label)}</div>
+      <div class="v">${esc(f.display || "not known yet")}</div>
+      ${f.pending ? '<div class="was">change waiting for approval</div>' : f.was ? `<div class="was">was ${esc(f.was)}</div>` : ""}
+    </div>`).join("");
+
+  const sampleRow = s => `<div class="row"><div class="grow">${esc(s.title)}<div class="muted">${esc(s.kind)}${s.baseline ? " · starting information" : ""}</div></div>
+    ${s.ingested ? '<span class="tag">read</span>' : `<button data-sample="${esc(s.file)}">Read</button>`}</div>`;
+  const waiting = S.samples.filter(s => !s.ingested), read = S.samples.filter(s => s.ingested);
+  $("incoming").innerHTML = waiting.map(sampleRow).join("") || '<div class="empty">Nothing waiting.</div>';
+  $("already").innerHTML = read.map(sampleRow).join("") || '<div class="empty">Nothing yet.</div>';
+
+  const ids = S.proposals.map(p => p.id);
+  [...unpicked].forEach(id => ids.includes(id) || unpicked.delete(id));
+  const picked = ids.filter(id => !unpicked.has(id));
+  $("proposals").innerHTML = (S.proposals.length ? `
+    <div class="pick"><strong>${plural(S.proposals.length, "change")} waiting for approval</strong><span class="grow"></span>
+      <button class="primary" id="approve-picked" ${picked.length ? "" : "disabled"}>Approve checked (${picked.length})</button>
+      <button id="reject-picked" ${picked.length ? "" : "disabled"}>Ignore checked</button></div>` : "")
+    + S.proposals.map(p => `
+    <div class="card">
+      <label class="sel"><input type="checkbox" data-pick="${p.id}" ${unpicked.has(p.id) ? "" : "checked"}>
+        <span class="change" style="margin:0">${esc(p.label)}: ${p.old_display ? `<s>${esc(p.old_display)}</s> → ` : ""}${esc(p.display)}</span></label>
+      ${p.quote ? `<blockquote>“${esc(p.quote)}”</blockquote>` : ""}
+      <div class="muted">${esc([p.source_kind, p.source_sender].filter(Boolean).join(" from "))}${p.confidence != null && p.confidence < 0.7 ? " · the agent is not sure about this one" : ""}
+        · ${plural(p.affects, "task")} depend${p.affects === 1 ? "s" : ""} on this</div>
+      ${p.old_backing ? `<div class="muted">${plural(p.old_backing, "source")} so far said ${esc(p.old_display)}; ${p.new_backing} now say${p.new_backing === 1 ? "s" : ""} ${esc(p.display)}. Check this is a real change and not a typo.</div>` : ""}
+    </div>`).join("");
+  $("affected").innerHTML = flagged.map(recheckCard).join("")
+    || (S.proposals.length ? "" : '<div class="empty">Nothing needs attention. Read an incoming item to see what it changes.</div>');
+
+  // Template tab: the whole checklist, with the same highlight on tasks to re-check
+  const shown = S.tasks.filter(t => t.status !== "dismissed");
+  const stageOf = t => t.template_id ? (t.stage || "Other") : "Added for this event";
+  const stages = [...new Set(shown.map(stageOf))].sort((a, b) => (b === "Added for this event") - (a === "Added for this event"));
+  $("tasks").innerHTML = stages.map(stage => `<h3>${esc(stage)}</h3><div>` + shown.filter(t => stageOf(t) === stage).map(t =>
+    t.status === "needs_recheck" ? recheckCard(t) : `
+    <label class="row task ${t.status}"><input type="checkbox" data-task="${t.id}" data-status="${t.status === "done" ? "ok" : "done"}" ${t.status === "done" ? "checked" : ""}>
+      <span class="grow title">${esc(t.title)}<div class="muted">${esc(t.owner_role || "")}</div></span>
+      <span class="muted ${t.status === "ok" && t.due_date && t.due_date < S.today ? "overdue" : ""}">${esc(t.due_display)}</span></label>`).join("") + "</div>").join("");
+}
+
+function summarize(r) {
+  if (!r) return "Done";
+  const parts = [];
+  if (!(r.new || r.proposed) && !r.flagged?.length && !r.added?.length) return "No tasks affected";
+  if (r.new?.length) parts.push(plural(r.new.length, "new fact"));
+  if (r.proposed?.length) parts.push(`${plural(r.proposed.length, "change")} waiting for approval`);
+  if (r.flagged?.length) parts.push(`${plural(r.flagged.length, "task")} to re-check`);
+  if (r.added?.length) parts.push(`${plural(r.added.length, "task")} added`);
+  return parts.join(", ") || "Nothing new in that one";
+}
+
+async function withBusy(btn, label, fn) {
+  const old = btn.textContent; btn.disabled = true; btn.textContent = label;
+  try { const d = await fn(); if (d) toast(summarize(d.result)); }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
+
+document.addEventListener("click", e => {
+  const cell = e.target.closest(".fact");
+  if (cell && !cell.querySelector("input")) return editFact(cell);
+  const b = e.target.closest("button, input[type=checkbox]"); if (!b) return;
+  if (b.dataset.pick) { b.checked ? unpicked.delete(+b.dataset.pick) : unpicked.add(+b.dataset.pick); return render(); }
+  if (b.id === "approve-picked" || b.id === "reject-picked") {
+    const ids = S.proposals.map(p => p.id).filter(id => !unpicked.has(id));
+    return withBusy(b, "Working…", () => api(`/api/facts/${b.id === "approve-picked" ? "approve" : "reject"}`, {ids}));
+  }
+  if (b.dataset.sample) withBusy(b, "Reading…", () => api("/api/ingest", {sample: b.dataset.sample}));
+  else if (b.dataset.task) api(`/api/tasks/${b.dataset.task}/status`, {status: b.dataset.status});
+  else if (b.id === "paste-btn") withBusy(b, "Reading…", async () => {
+    const d = await api("/api/ingest", {kind: $("kind").value, sender: $("sender").value, text: $("text").value});
+    if (d) $("text").value = ""; return d; });
+  else if (b.id === "reset" && confirm("Clear everything and reload the starting information?")) api("/api/reset", {});
+});
+
+// Click a fact to type a new value. Enter saves it to the database; Esc cancels.
+function editFact(cell) {
+  const v = cell.querySelector(".v"), input = document.createElement("input");
+  input.type = "text"; input.value = cell.dataset.edit;
+  v.replaceWith(input); input.focus(); input.select();
+  let finished = false;
+  const finish = async save => {
+    if (finished) return; finished = true;
+    const value = input.value.trim();
+    if (save && value && value !== cell.dataset.edit) {
+      const d = await api("/api/facts/set", {key: cell.dataset.key, value});
+      if (d) return toast("Saved. " + summarize(d.result));
+    }
+    render();
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); });
+  input.addEventListener("blur", () => finish(false));
+}
+
+showTab();
+api("/api/state");
+</script>
+</body>
+</html>

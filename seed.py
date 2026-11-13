@@ -23,18 +23,6 @@ XLSX = Path(sys.argv[1]) if len(sys.argv) > 1 else HERE / "Event_orchestrator.xl
 NOT_FACTS = {"task_id"}          # rows on fact_sheet that aren't event facts
 MAX_OFFSET_DAYS = 400            # anything further out is probably a typo'd date
 
-# Considerations sheet has titles + actions; triggers are defined here.
-# on_change: fact keys whose change fires it. condition: optional extra check
-# your cascade code evaluates (e.g. did the season actually change?).
-CONSIDERATION_TRIGGERS = {
-    "change of season": {"on_change": ["event_start_date"], "condition": "season_changed"},
-    "update to attendance of guest of honor": {"on_change": ["speaker_details"]},
-    "update to event date": {"on_change": ["event_start_date", "event_end_date"]},
-    "update to headcount": {"on_change": ["headcount_expected"]},
-    "update to budget": {"on_change": ["budget_total"]},
-}
-
-
 def clean(v):
     return v.strip() if isinstance(v, str) else v
 
@@ -75,17 +63,44 @@ def load_templates(ws, valid_keys, warnings):
     return rows
 
 
-def load_considerations(ws, warnings):
+SEASONS = {"winter", "spring", "summer", "fall"}
+
+
+def load_considerations(ws, valid_keys, warnings):
+    """Columns: Consideration | Action | When (season) | Tasks (one per line) |
+    Learned from | Fires when these facts change.
+
+    A row with a season in 'When' adds its tasks whenever the event date lands in
+    that season. Other rows add their tasks when any listed fact key changes.
+    """
+    header = [clean(c.value) for c in ws[1]]
+    col = {name: i for i, name in enumerate(header) if name}
+
+    def cell(r, name):
+        return clean(r[col[name]]) if name in col and col[name] < len(r) else None
+
     rows = []
-    for title, action in ws.iter_rows(min_row=2, max_col=2, values_only=True):
-        title, action = clean(title), clean(action)
+    for r in ws.iter_rows(min_row=2, values_only=True):
+        title, action = cell(r, "Consideration"), cell(r, "Action")
         if not title:
             continue
-        trig = CONSIDERATION_TRIGGERS.get(title.lower())
-        if trig is None:
-            warnings.append(f"Consideration '{title}' has no trigger defined in seed.py")
-            trig = {}
-        rows.append((title, json.dumps(trig), action))
+        season = (cell(r, "When (season)") or "").lower()
+        tasks = [t.strip() for t in (cell(r, "Tasks (one per line)") or "").splitlines() if t.strip()]
+        if season:
+            if season not in SEASONS:
+                warnings.append(f"Consideration '{title}': unknown season '{season}'")
+                continue
+            trig = {"on_change": ["event_start_date"], "season": season}
+        else:
+            keys = [k.strip() for k in (cell(r, "Fires when these facts change") or "").split(",") if k.strip()]
+            for k in keys:
+                if k not in valid_keys:
+                    warnings.append(f"Consideration '{title}': unknown fact key '{k}'")
+            if not keys:
+                warnings.append(f"Consideration '{title}' will never fire: fill in "
+                                f"'When (season)' or 'Fires when these facts change'")
+            trig = {"on_change": keys}
+        rows.append((title, json.dumps(trig), action, cell(r, "Learned from"), json.dumps(tasks)))
     return rows
 
 
@@ -98,7 +113,7 @@ def main():
     for ws in wb.worksheets:
         if ws.title.startswith("task_template"):
             templates += load_templates(ws, set(keys), warnings)
-    considerations = load_considerations(wb["considerations"], warnings)
+    considerations = load_considerations(wb["considerations"], set(keys), warnings)
 
     with get_conn() as conn:
         conn.executemany("INSERT OR IGNORE INTO fact_keys(key) VALUES (?)", [(k,) for k in keys])
@@ -110,7 +125,7 @@ def main():
         )
         conn.execute("DELETE FROM considerations")
         conn.executemany(
-            "INSERT INTO considerations(title, triggers, action) VALUES (?,?,?)",
+            "INSERT INTO considerations(title, triggers, action, origin_event, tasks) VALUES (?,?,?,?,?)",
             considerations,
         )
 

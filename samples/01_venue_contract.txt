@@ -1,0 +1,31 @@
+kind: contract
+sender: The Foundry Loft
+received_at: 2026-11-02T10:00:00
+title: Venue contract - The Foundry Loft
+baseline: yes
+---
+THE FOUNDRY LOFT - EVENT AGREEMENT
+
+Client: Northwind Partners
+Event: Annual Client Summit
+
+1. DATE AND TIME. The Event will be held on Thursday, February 18, 2027. The space
+is reserved from 6:00 PM to 9:00 PM. Client access for setup begins at 4:00 PM.
+
+2. SPACE. The Main Hall is an indoor space with a maximum seated capacity of 120
+guests. Standing receptions may accommodate more, subject to written approval from
+the venue manager.
+
+3. FOOD AND BEVERAGE. Client agrees to a food and beverage minimum of $9,000,
+exclusive of tax and a 22% service charge. Menus are priced per person.
+
+4. GUARANTEED HEADCOUNT. Client must provide a final guaranteed headcount no later
+than February 4, 2027. After that date the guarantee may be increased, subject to
+capacity, but not reduced. An attrition allowance of 10% applies before that date.
+
+5. CANCELLATION. Client may cancel without penalty until January 19, 2027.
+Cancellations after that date forfeit the full food and beverage minimum.
+
+6. PARKING. Valet parking is available on site and billed per vehicle.
+
+Signed: R. Alvarez, Events Manager, The Foundry Loft

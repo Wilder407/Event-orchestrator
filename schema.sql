@@ -23,11 +23,19 @@ CREATE TABLE IF NOT EXISTS facts (
     value       TEXT NOT NULL,
     unit        TEXT,
     status      TEXT NOT NULL DEFAULT 'proposed'
-                CHECK (status IN ('proposed','confirmed','superseded','conflict')),
+                CHECK (status IN ('proposed','confirmed','superseded','rejected')),
     source_id   INTEGER REFERENCES sources(id),
     quote       TEXT,                    -- exact text the fact came from
     confidence  REAL,
     observed_at TEXT NOT NULL
+);
+
+-- Later sources that repeat a fact's current value (how well-established it is)
+CREATE TABLE IF NOT EXISTS fact_mentions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    fact_id     INTEGER NOT NULL REFERENCES facts(id),
+    source_id   INTEGER NOT NULL REFERENCES sources(id),
+    quote       TEXT
 );
 
 -- The fact keys the extractor is allowed to produce
@@ -62,18 +70,18 @@ CREATE TABLE IF NOT EXISTS tasks (
     template_id INTEGER REFERENCES task_templates(id),
     consideration_id INTEGER REFERENCES considerations(id),
     title       TEXT NOT NULL,
+    stage       TEXT,
+    owner_role  TEXT,
     due_date    TEXT,
+    flag_reason TEXT,                    -- why the cascade flagged it, citing the source
+    flag_fact_id INTEGER REFERENCES facts(id),
     status      TEXT NOT NULL DEFAULT 'ok'
                 CHECK (status IN ('ok','needs_recheck','done','dismissed')),
     dismiss_reason TEXT,
     asana_gid   TEXT
 );
 
--- Current value of each fact = latest non-superseded row
+-- Current value of each fact = the one confirmed row per key
+-- (approving a change marks the previous row 'superseded')
 CREATE VIEW IF NOT EXISTS current_facts AS
-SELECT f.* FROM facts f
-WHERE f.status != 'superseded'
-  AND f.observed_at = (
-      SELECT MAX(observed_at) FROM facts
-      WHERE event_id = f.event_id AND key = f.key AND status != 'superseded'
-  );
+SELECT f.* FROM facts f WHERE f.status = 'confirmed';

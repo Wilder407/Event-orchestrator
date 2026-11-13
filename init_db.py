@@ -4,12 +4,13 @@ Usage:
     python init_db.py           # create events.db if missing
     python init_db.py --reset   # delete and rebuild (handy between demo runs)
 """
+import os
 import sqlite3
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).parent
-DB_PATH = HERE / "events.db"
+DB_PATH = Path(os.environ.get("EVENTS_DB", HERE / "events.db"))
 SCHEMA_PATH = HERE / "schema.sql"
 
 

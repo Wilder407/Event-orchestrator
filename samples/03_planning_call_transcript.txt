@@ -1,0 +1,29 @@
+kind: transcript
+sender: Weekly planning call
+received_at: 2026-11-12T14:00:00
+title: Transcript - weekly planning call
+---
+Weekly planning call - Client Summit
+
+Dana: Okay, quick update from sales. The response to the save-the-date has been
+much stronger than we thought. A lot of clients want to bring a colleague.
+
+Priya: How much stronger?
+
+Dana: I talked to leadership this morning and we're not going to turn people away.
+We're now planning for 150 guests, not 100.
+
+Priya: That's a big jump. Does everything still work at 150?
+
+Dana: I assume so? The venue is huge. Can you just update the plan?
+
+Priya: I'll look into it. Marcus, anything on AV?
+
+Marcus: Dr. Okafor's office confirmed what she needs: two wireless handheld mics,
+a projector with HDMI, and a confidence monitor on stage.
+
+Priya: Got it. Should we think about moving the keynote earlier?
+
+Marcus: Maybe. Let's not decide that today.
+
+Dana: Agreed. Thanks all.

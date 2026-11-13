@@ -1,0 +1,20 @@
+kind: email
+sender: R. Alvarez (The Foundry Loft)
+received_at: 2026-11-13T08:40:00
+title: Email - venue needs to move the date
+---
+Subject: Northwind Client Summit - date change
+
+Hi Priya,
+
+I'm sorry to do this. A burst pipe means the Main Hall will be closed for repairs
+through March, so we cannot host you on February 18.
+
+As agreed on the phone with Dana this morning, we are moving your event to
+Thursday, May 13, 2027, same times, same terms. Your final guaranteed headcount is
+now due April 29, 2027, and the penalty-free cancellation date moves to April 13, 2027.
+
+An amended contract will follow today.
+
+Rosa Alvarez
+Events Manager, The Foundry Loft

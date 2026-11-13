@@ -1,0 +1,24 @@
+kind: email
+sender: Dana Whitfield (VP Client Relations)
+received_at: 2026-11-03T09:15:00
+title: Email - Client Summit kickoff
+baseline: yes
+---
+Subject: Client Summit - kickoff details
+
+Hi team,
+
+Thanks for taking this on. Here is where we landed after the leadership meeting:
+
+- We're expecting 100 guests. Mostly local clients, plus about 15 flying in from out
+  of town, so we'll need a hotel block.
+- Total budget is $25,000, all in.
+- Dinner should be plated, not a buffet. Please make sure there are vegetarian and
+  gluten-free options.
+- Dr. Maya Okafor has agreed to give the keynote.
+- Doors open at 5:30 PM so people can check in before the 6:00 start. Allow about
+  30 minutes for registration.
+
+The Foundry Loft contract is signed, so the date is locked for February 18.
+
+Dana
