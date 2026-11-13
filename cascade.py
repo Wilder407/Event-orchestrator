@@ -304,6 +304,16 @@ def cascade(conn, event_id, new, old):
                 if added:
                     result["added"].append(added)
 
+    # A "send the venue the new headcount by <date>" reminder follows the deadline when it moves
+    if key == "headcount_guarantee_deadline" and old is not None and _date(new["value"]) and _date(old["value"]):
+        was, now = show_date(_date(old["value"])), show_date(_date(new["value"]))
+        for t in conn.execute(
+                f"SELECT * FROM tasks WHERE event_id = ? AND template_id IS NULL AND title LIKE ? AND status IN {OPEN}",
+                (event_id, f"% by {was}")).fetchall():
+            conn.execute("UPDATE tasks SET title = ? WHERE id = ?", (t["title"].replace(f"by {was}", f"by {now}"), t["id"]))
+            _flag(conn, t, change, new["id"])
+            result["flagged"].append(t["title"].replace(f"by {was}", f"by {now}"))
+
     # 3. Hard constraints between facts (checked on every confirmed fact)
     for title, reason in _constraint_problems(facts, key, changed=old is not None):
         added = _add_alert(conn, event_id, title, f"{reason} ({_cite(conn, new)})", new["id"])

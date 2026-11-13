@@ -138,6 +138,9 @@ def state(conn, event_id=None):
         "events": [dict(r) for r in conn.execute("SELECT id, name, type FROM events ORDER BY id")],
         "event_types": [r[0] for r in conn.execute("SELECT DISTINCT event_type FROM task_templates ORDER BY 1")],
         "today": datetime.now().date().isoformat(),
+        "roles": [r[0] for r in conn.execute(
+            """SELECT owner_role FROM task_templates WHERE owner_role IS NOT NULL
+               UNION SELECT owner_role FROM tasks WHERE event_id = ? AND owner_role IS NOT NULL ORDER BY 1""", (eid,))],
         "proposals": proposals,
         "decided": decided,
         "notice": NOTICE["text"],
@@ -145,7 +148,8 @@ def state(conn, event_id=None):
         "facts": [f for f in facts if f["status"] == "confirmed"],
         "tasks": [{**dict(t), "due_display": cascade.fmt(t["due_date"]) if t["due_date"] else ""} for t in tasks],
         "sources": [{k: s[k] for k in ("id", "kind", "sender", "received_at")} for s in sources],
-        "samples": [{**{k: s[k] for k in ("file", "title", "kind", "baseline")}, "ingested": s["text"] in ingested} for s in samples],
+        "samples": [{**{k: s[k] for k in ("file", "title", "kind", "baseline", "sender")},
+                     "received": cascade.fmt(s["received_at"] or ""), "ingested": s["text"] in ingested} for s in samples],
     }
 
 
@@ -214,6 +218,8 @@ class Handler(BaseHTTPRequestHandler):
         if len(parts) == 4 and parts[1] == "facts" and parts[3] in ("approve", "reject"):
             fn = cascade.approve if parts[3] == "approve" else cascade.reject
             return self._run(lambda c, b, eid: fn(c, int(parts[2])))
+        if len(parts) == 4 and parts[1] == "tasks" and parts[3] == "owner":
+            return self._run(lambda c, b, eid: set_task_owner(c, int(parts[2]), b.get("owner")))
         if len(parts) == 4 and parts[1] == "tasks" and parts[3] == "status":
             return self._run(lambda c, b, eid: set_task_status(c, int(parts[2]), b.get("status")))
         self._send({"error": "Not found"}, 404)
@@ -264,6 +270,14 @@ def decide_many(conn, ids, fn):
         total["flagged"].update(r.get("flagged", []))
         total["added"] += r.get("added", [])
     return {"flagged": sorted(total["flagged"]), "added": total["added"]}
+
+
+def set_task_owner(conn, task_id, owner):
+    owner = (owner or "").strip()
+    if not owner:
+        raise ValueError("Pick who is responsible")
+    conn.execute("UPDATE tasks SET owner_role = ? WHERE id = ?", (owner, task_id))
+    return {"owner": owner}
 
 
 def set_many_tasks(conn, ids, status):

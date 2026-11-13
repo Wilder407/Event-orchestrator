@@ -1,0 +1,16 @@
+kind: email
+sender: The Foundry Loft (newsletter)
+received_at: 2026-11-18T07:00:00
+title: Email - Foundry Loft November newsletter
+---
+Subject: What's new at The Foundry Loft this season
+
+Hello from The Foundry Loft!
+
+- Our new Rooftop Terrace opens next summer, with room for 200 guests standing.
+- Planning a holiday party? Book before December 1 and save 10% on Friday dates.
+- Congratulations to Brightside Media, who hosted 300 guests in our Main Hall and
+  Gallery for their product launch last month.
+- Meet our new head chef, Amara Diallo, at our open tasting night on January 14.
+
+Follow us for more updates. To stop receiving these emails, unsubscribe here.

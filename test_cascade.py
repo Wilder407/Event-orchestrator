@@ -81,6 +81,11 @@ assert "Contact Vendor About Increase or Decrease in Headcount" in r["added"], r
 statuses = [x[0] for x in conn.execute("SELECT status FROM facts WHERE key='headcount_expected' ORDER BY id")]
 assert statuses == ["superseded", "confirmed"], statuses
 
+# 3b. The headcount reminder follows the guarantee deadline when it moves
+cascade.set_fact(conn, eid, "headcount_guarantee_deadline", "04-29-2027")
+titles = [r[0] for r in conn.execute("SELECT title FROM tasks WHERE title LIKE 'Send the Venue%'")]
+assert titles == ["Send the Venue the New Headcount (150) by 04-29-2027"], titles
+
 # 4. Date moves to May: due dates shift and the season consideration fires
 cascade.record_facts(conn, eid, source("email", "Venue", "2026-11-13"), [fact("event_start_date", "2027-05-13")])
 pid = conn.execute("SELECT id FROM facts WHERE key='event_start_date' AND status='proposed'").fetchone()[0]

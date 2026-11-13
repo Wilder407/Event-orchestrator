@@ -24,6 +24,11 @@
   nav { display:flex; gap:4px; padding:10px 24px 0; }
   nav a { padding:7px 14px; border:1px solid var(--line); border-bottom:0; border-radius:8px 8px 0 0; color:var(--muted); text-decoration:none; background:var(--bg); }
   nav a.on { color:var(--ink); background:var(--card); font-weight:600; position:relative; top:1px; }
+  #roles { margin-left:auto; display:flex; gap:6px; flex-wrap:wrap; align-items:center; padding-bottom:6px; }
+  #roles .lbl { font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  #roles button { padding:2px 10px; border-radius:14px; font-size:13.5px; }
+  #roles button.on { background:var(--ink); color:#fff; border-color:var(--ink); }
+  select.owner { font:inherit; font-size:13px; width:auto; margin:0; padding:1px 4px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--ink); }
   .count { background:var(--flag-line); color:var(--ink); border-radius:10px; padding:0 7px; font-size:12px; font-weight:600; margin-left:4px; }
   #facts-window { padding:12px 24px 14px; border-top:1px solid var(--line); max-height:42vh; overflow:auto; }
   #facts-window h2 { margin-bottom:8px; }
@@ -50,6 +55,13 @@
   @media (max-width:800px) { .top { position:static; } #facts-window { max-height:none; } }
 
   main { padding:16px 24px 40px; }
+  .stack { display:grid; gap:16px; }
+  #incoming { display:grid; grid-template-columns:repeat(auto-fill, minmax(190px, 1fr)); gap:10px; }
+  .item { border:1px solid var(--line); border-radius:8px; padding:10px 12px; display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .item .t { font-weight:600; overflow-wrap:anywhere; }
+  .item button { margin-top:auto; align-self:flex-start; }
+  .item.more { align-items:center; justify-content:center; border-style:dashed; cursor:pointer; color:var(--muted); background:none; font:inherit; }
+  #incoming-count { text-transform:none; letter-spacing:0; font-weight:400; }
   .cols { display:grid; grid-template-columns:minmax(260px,1fr) minmax(360px,2fr); gap:16px; align-items:start; }
   @media (max-width:800px) { .cols { grid-template-columns:1fr; } }
   [hidden] { display:none !important; }
@@ -100,6 +112,7 @@
   <nav>
     <a href="#updates" data-tab="updates">Updates</a>
     <a href="#template" data-tab="template">Template <span id="template-count"></span></a>
+    <div id="roles"></div>
   </nav>
   <div id="facts-window">
     <h2>Event facts <span style="text-transform:none; letter-spacing:0; font-weight:400">· click a value to change it, or empty it to leave it blank</span></h2>
@@ -110,10 +123,9 @@
 <main>
   <div id="notice"></div>
 
-  <div id="view-updates" class="cols">
+  <div id="view-updates" class="stack">
     <section>
-      <h2>Incoming</h2>
-      <div class="muted" style="margin-bottom:6px">New emails, call transcripts and contracts for the agent to read.</div>
+      <h2>Incoming <span id="incoming-count"></span></h2>
       <div id="incoming"></div>
       <details id="paste-box">
         <summary>Paste something else</summary>
@@ -122,7 +134,6 @@
         <textarea id="text" placeholder="Paste the text here"></textarea>
         <button id="paste-btn" class="primary">Read it</button>
       </details>
-      <h3>Already read</h3>
       <div id="already"></div>
     </section>
 
@@ -151,6 +162,9 @@ const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 let S = null, current = null;         // current = id of the event being shown
 try { current = localStorage.getItem("event"); } catch {}
 const openSections = new Set();      // expandable sections the user has opened
+const INCOMING_SHOWN = 5;            // items shown before the "+ more" card
+let showAllIncoming = false;
+let roleFilter = null;               // show only this role's tasks (null = everyone)
 const pickedTasks = new Set();       // tasks to re-check the user has ticked
 const unpicked = new Set();          // proposed changes the user has unticked
 
@@ -188,9 +202,16 @@ function recheckCard(t) {
   return `<div class="card recheck">
       <label class="sel"><input type="checkbox" data-picktask="${t.id}" ${pickedTasks.has(t.id) ? "checked" : ""}>
         <strong>${esc(t.title)}</strong> <span class="tag">${t.template_id ? "Re-check" : "Added"}</span></label>
-      <div class="muted">${esc(t.owner_role || "")}${t.due_display ? " · due " + esc(t.due_display) : ""}</div>
+      <div class="muted">${ownerSelect(t)}${t.due_display ? " · due " + esc(t.due_display) : ""}</div>
       ${lines}
     </div>`;
+}
+
+// Who is responsible for a task, changeable in place.
+function ownerSelect(t) {
+  const roles = S.roles.includes(t.owner_role) || !t.owner_role ? S.roles : [...S.roles, t.owner_role];
+  return `<select class="owner" data-owner="${t.id}" title="Who is responsible">${t.owner_role ? "" : '<option value="">Unassigned</option>'}`
+    + roles.map(r => `<option ${r === t.owner_role ? "selected" : ""}>${esc(r)}</option>`).join("") + "</select>";
 }
 
 // Tick tasks, then close them together.
@@ -204,13 +225,24 @@ function taskBar(flagged) {
 }
 
 function render() {
-  const flagged = S.tasks.filter(t => t.status === "needs_recheck");
+  const allFlagged = S.tasks.filter(t => t.status === "needs_recheck");
+  if (roleFilter && !S.tasks.some(t => t.owner_role === roleFilter)) roleFilter = null;
+  const mine = t => !roleFilter || t.owner_role === roleFilter;
+  const flagged = allFlagged.filter(mine);
+  // event-level view by role: open tasks and how many need a re-check; click to filter both tabs
+  const open = S.tasks.filter(t => t.status === "ok" || t.status === "needs_recheck");
+  const roleChip = (role, label) => {
+    const n = open.filter(t => !role || t.owner_role === role), r = n.filter(t => t.status === "needs_recheck").length;
+    return `<button data-role="${esc(role || "")}" class="${(roleFilter || "") === (role || "") ? "on" : ""}" title="${n.length} open, ${r} to re-check">${esc(label)} ${n.length}${r ? ` <span class="count">${r}</span>` : ""}</button>`;
+  };
+  $("roles").innerHTML = '<span class="lbl">Responsible</span>' + roleChip(null, "Everyone")
+    + [...new Set(S.tasks.map(t => t.owner_role).filter(Boolean))].sort().map(r => roleChip(r, r)).join("");
   const known = S.board.filter(f => f.display).length;
   $("event-pick").innerHTML = S.events.map(ev => `<option value="${ev.id}" ${ev.id === S.event.id ? "selected" : ""}>${esc(ev.name)}</option>`).join("");
   $("new-type").innerHTML = S.event_types.map(t => `<option>${esc(t)}</option>`).join("");
   document.title = S.event.name;
-  $("event-sub").textContent = `${S.event.type} · ${known} of ${S.board.length} facts known · ${plural(flagged.length, "task")} to re-check`;
-  $("template-count").innerHTML = flagged.length ? `<span class="count">${flagged.length}</span>` : "";
+  $("event-sub").textContent = `${S.event.type} · ${known} of ${S.board.length} facts known · ${plural(allFlagged.length, "task")} to re-check`;
+  $("template-count").innerHTML = allFlagged.length ? `<span class="count">${allFlagged.length}</span>` : "";
   $("notice").innerHTML = S.notice ? `<div class="notice">${esc(S.notice)}</div>` : "";
 
   const groups = [...new Set(S.board.map(f => f.group))];
@@ -224,10 +256,20 @@ function render() {
   const sampleRow = s => `<div class="row"><div class="grow">${esc(s.title)}<div class="muted">${esc(s.kind)}${s.baseline ? " · starting information" : ""}</div></div>
     ${s.ingested ? '<span class="tag">read</span>' : `<button data-sample="${esc(s.file)}">Read</button>`}</div>`;
   const waiting = S.samples.filter(s => !s.ingested), read = S.samples.filter(s => s.ingested);
-  $("incoming").innerHTML = waiting.map(sampleRow).join("")
-    || `<div class="empty">${S.samples.length ? "Nothing waiting." : "Paste an email, transcript or contract below."}</div>`;
+  // Incoming queue: oldest first, the first few shown; reading one moves the next up
+  const item = s => `<div class="item"><span class="tag" style="align-self:flex-start">${esc(s.kind)}</span>
+      <div class="t">${esc(s.title.replace(/^[^-]+ - /, ""))}</div>
+      <div class="muted">${esc([s.sender, s.received].filter(Boolean).join(" · "))}</div>
+      <button class="primary" data-sample="${esc(s.file)}">Read</button></div>`;
+  const visible = showAllIncoming ? waiting : waiting.slice(0, INCOMING_SHOWN), hiddenCount = waiting.length - visible.length;
+  $("incoming-count").textContent = waiting.length ? `· ${waiting.length} waiting` : "";
+  $("incoming").innerHTML = (visible.map(item).join("")
+      + (hiddenCount ? `<button class="item more" id="incoming-more">+ ${hiddenCount} more</button>` : "")
+      + (showAllIncoming && waiting.length > INCOMING_SHOWN ? '<button class="item more" id="incoming-less">Show fewer</button>' : ""))
+    || `<div class="empty">${S.samples.length ? "Nothing waiting. New emails, transcripts and contracts will appear here." : "Paste an email, transcript or contract below."}</div>`;
   if (!S.samples.length) $("paste-box").open = true;
-  $("already").innerHTML = read.map(sampleRow).join("") || '<div class="empty">Nothing yet.</div>';
+  $("already").innerHTML = read.length ? `<details class="history" data-section="read" ${openSections.has("read") ? "open" : ""}>
+      <summary>Already read (${read.length})</summary><div>${read.map(sampleRow).join("")}</div></details>` : "";
 
   const ids = S.proposals.map(p => p.id);
   [...unpicked].forEach(id => ids.includes(id) || unpicked.delete(id));
@@ -254,23 +296,24 @@ function render() {
   const pastRow = t => `<div class="row past"><span class="tag">${outcome(t)}</span>
       <div class="grow">${esc(t.title)}<p class="reason">${esc(t.flag_reason || "")}</p></div>
       <button data-task="${t.id}" data-status="needs_recheck">Reopen</button></div>`;
-  const resolved = S.tasks.filter(t => t.flag_reason && t.status !== "needs_recheck");
+  const resolved = S.tasks.filter(t => t.flag_reason && t.status !== "needs_recheck" && mine(t));
   const history = (id, title, body) => body ? `<details class="history" data-section="${id}" ${openSections.has(id) ? "open" : ""}><summary>${title}</summary><div>${body}</div></details>` : "";
   $("completed").innerHTML =
     history("done", `Completed (${resolved.length})`, resolved.map(pastRow).join(""))
     + history("decided", `Changes decided (${S.decided.length})`, S.decided.map(d => `<div class="row past"><span class="tag">${d.outcome}</span>
       <div class="grow">${esc(d.label)}: ${esc(d.display)}<div class="muted">${esc(d.source)}</div></div></div>`).join(""));
-  const dismissed = S.tasks.filter(t => t.status === "dismissed");
+  const dismissed = S.tasks.filter(t => t.status === "dismissed" && mine(t));
   $("set-aside").innerHTML = history("dismissed", `Marked not relevant (${dismissed.length})`, dismissed.map(pastRow).join(""));
 
   // Template tab: the whole checklist, with the same highlight on tasks to re-check
-  const shown = S.tasks.filter(t => t.status !== "dismissed");
+  const shown = S.tasks.filter(t => t.status !== "dismissed" && mine(t));
   const stageOf = t => t.template_id ? (t.stage || "Other") : "Added for this event";
   const stages = [...new Set(shown.map(stageOf))].sort((a, b) => (b === "Added for this event") - (a === "Added for this event"));
   $("tasks").innerHTML = taskBar(flagged) + stages.map(stage => `<h3>${esc(stage)}</h3><div>` + shown.filter(t => stageOf(t) === stage).map(t =>
     t.status === "needs_recheck" ? recheckCard(t) : `
     <label class="row task ${t.status}"><input type="checkbox" data-task="${t.id}" data-status="${t.status === "done" ? "ok" : "done"}" ${t.status === "done" ? "checked" : ""}>
-      <span class="grow title">${esc(t.title)}<div class="muted">${esc(t.owner_role || "")}</div></span>
+      <span class="grow title">${esc(t.title)}</span>
+      ${ownerSelect(t)}
       <span class="muted ${t.status === "ok" && t.due_date && t.due_date < S.today ? "overdue" : ""}">${esc(t.due_display)}</span></label>`).join("") + "</div>").join("");
 }
 
@@ -295,12 +338,15 @@ async function withBusy(btn, label, fn) {
 document.addEventListener("click", e => {
   const cell = e.target.closest(".fact");
   if (cell && !cell.querySelector("input")) return editFact(cell);
+  if (e.target.closest("select.owner")) return;     // choosing an owner must not tick the task's checkbox
   const b = e.target.closest("button, input[type=checkbox]"); if (!b) return;
   if (b.dataset.picktask) { b.checked ? pickedTasks.add(+b.dataset.picktask) : pickedTasks.delete(+b.dataset.picktask); return render(); }
   if ("pickall" in b.dataset) {
-    S.tasks.filter(t => t.status === "needs_recheck").forEach(t => b.checked ? pickedTasks.add(t.id) : pickedTasks.delete(t.id));
+    S.tasks.filter(t => t.status === "needs_recheck" && (!roleFilter || t.owner_role === roleFilter)).forEach(t => b.checked ? pickedTasks.add(t.id) : pickedTasks.delete(t.id));
     return render();
   }
+  if (b.id === "incoming-more" || b.id === "incoming-less") { showAllIncoming = b.id === "incoming-more"; return render(); }
+  if ("role" in b.dataset) { roleFilter = b.dataset.role || null; pickedTasks.clear(); return render(); }
   if (b.dataset.bulk) return withBusy(b, "Working…", () => api("/api/tasks/status", {ids: [...pickedTasks], status: b.dataset.bulk}));
   if (b.dataset.pick) { b.checked ? unpicked.delete(+b.dataset.pick) : unpicked.add(+b.dataset.pick); return render(); }
   if (b.id === "approve-picked" || b.id === "reject-picked") {
@@ -334,6 +380,11 @@ function editFact(cell) {
   input.addEventListener("blur", () => finish(false));
 }
 
+document.addEventListener("change", async e => {    // reassign a task from its drop-down
+  const sel = e.target.closest("select.owner"); if (!sel) return;
+  const d = await api(`/api/tasks/${sel.dataset.owner}/owner`, {owner: sel.value});
+  if (d) toast(`Reassigned to ${sel.value}`);
+});
 document.addEventListener("toggle", e => {          // remember which sections are open across refreshes
   const id = e.target.dataset?.section; if (!id) return;
   e.target.open ? openSections.add(id) : openSections.delete(id);

@@ -1,0 +1,16 @@
+kind: email
+sender: Dana Whitfield (VP Client Relations)
+received_at: 2026-11-20T16:45:00
+title: Email - revised budget approved
+---
+Subject: Client Summit - revised budget
+
+Team,
+
+Finance signed off this afternoon. Given the larger guest list, the total budget
+for the Client Summit is now $32,000, up from $25,000.
+
+Please keep photography and AV inside what we already planned. The increase is
+meant to cover the extra dinners and the bigger room block.
+
+Dana

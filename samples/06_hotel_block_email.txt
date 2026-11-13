@@ -1,0 +1,17 @@
+kind: email
+sender: Marcus Bell (Operations)
+received_at: 2026-11-17T15:05:00
+title: Email - hotel block update
+---
+Subject: Hotel block - numbers went up
+
+Priya,
+
+I went back through the RSVPs with the regional sales leads. With the bigger
+guest list we now have 28 people flying in from out of town, not 15. I've asked
+the Marlowe Hotel to extend our room block to cover all 28.
+
+Most of them land the afternoon of the event, so we should think about how they
+get from the hotel to the venue.
+
+Marcus

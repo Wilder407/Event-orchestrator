@@ -1,0 +1,17 @@
+kind: email
+sender: R. Alvarez (The Foundry Loft)
+received_at: 2026-11-19T10:30:00
+title: Email - parking for your May date
+---
+Subject: Northwind Client Summit - parking on May 13
+
+Hi Priya,
+
+One more change that comes with the new date. Our valet partner is not available
+on May 13, so we will not be able to offer valet parking for your event.
+
+Guests can self-park in the Mill Street Garage, one block from the venue. I can
+send you a map and validation codes to share with your guests.
+
+Rosa Alvarez
+Events Manager, The Foundry Loft

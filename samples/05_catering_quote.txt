@@ -1,0 +1,19 @@
+kind: contract
+sender: Foundry Loft Catering
+received_at: 2026-11-16T11:20:00
+title: Quote - catering for 150 guests
+---
+THE FOUNDRY LOFT CATERING - QUOTE #2291
+
+Client: Northwind Partners
+Event: Annual Client Summit, Thursday, May 13, 2027
+
+Three-course plated dinner for 150 guests at $85 per person: $12,750
+Includes vegetarian and gluten-free entrees on request.
+Wine and beer service, three hours: $3,300
+Subtotal: $16,050 (meets the $9,000 food and beverage minimum)
+
+A deposit of 25% is due December 15, 2026 to hold this menu and pricing.
+The balance is due with the final guaranteed headcount.
+
+Prepared by: Jo Lindqvist, Catering Sales
