@@ -40,7 +40,9 @@ CREATE TABLE IF NOT EXISTS fact_mentions (
 
 -- The fact keys the extractor is allowed to produce
 CREATE TABLE IF NOT EXISTS fact_keys (
-    key         TEXT PRIMARY KEY
+    key         TEXT PRIMARY KEY,
+    grp         TEXT,                    -- heading it sits under in the Event facts window
+    position    INTEGER                  -- order on the fact_sheet
 );
 
 CREATE TABLE IF NOT EXISTS task_templates (

@@ -17,7 +17,9 @@
   /* top: title, tabs and the event facts window stay in view */
   .top { position:sticky; top:0; z-index:5; background:var(--card); border-bottom:1px solid var(--line); box-shadow:0 2px 8px rgba(0,0,0,.05); }
   header { padding:14px 24px 0; display:flex; align-items:baseline; gap:16px; flex-wrap:wrap; }
-  h1 { font-size:21px; margin:0; }
+  #event-pick { font:inherit; font-size:20px; font-weight:700; border:1px solid var(--line); border-radius:7px; padding:3px 8px; background:var(--card); max-width:60vw; }
+  #new-event { display:flex; gap:8px; padding:10px 24px 0; flex-wrap:wrap; align-items:center; }
+  #new-event input, #new-event select { width:auto; margin:0; flex:1; min-width:180px; max-width:340px; }
   header .sub { color:var(--muted); flex:1; min-width:200px; }
   nav { display:flex; gap:4px; padding:10px 24px 0; }
   nav a { padding:7px 14px; border:1px solid var(--line); border-bottom:0; border-radius:8px 8px 0 0; color:var(--muted); text-decoration:none; background:var(--bg); }
@@ -25,7 +27,10 @@
   .count { background:var(--flag-line); color:var(--ink); border-radius:10px; padding:0 7px; font-size:12px; font-weight:600; margin-left:4px; }
   #facts-window { padding:12px 24px 14px; border-top:1px solid var(--line); max-height:42vh; overflow:auto; }
   #facts-window h2 { margin-bottom:8px; }
-  #board { display:grid; grid-template-columns:repeat(auto-fill, minmax(165px, 1fr)); gap:6px 8px; }
+  .group { display:grid; grid-template-columns:110px 1fr; gap:8px; align-items:start; margin-top:6px; }
+  .group > .name { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); padding-top:7px; }
+  .group > .cells { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:6px 8px; }
+  @media (max-width:800px) { .group { grid-template-columns:1fr; } }
   .fact { border:1px solid var(--line); border-radius:7px; padding:5px 9px; min-width:0; }
   .fact .k { font-size:11.5px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
   .fact .v { font-weight:600; overflow-wrap:anywhere; }
@@ -34,6 +39,10 @@
   .fact:hover { border-color:var(--ink); }
   .fact input { font:inherit; font-weight:600; width:100%; border:1px solid var(--ink); border-radius:5px; padding:1px 5px; margin:0; }
   .pick { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+  .reason .more { color:var(--muted); border-bottom:1px dotted var(--muted); cursor:help; white-space:nowrap; }
+  .related { display:none; margin:6px 0 0; padding:8px 10px 8px 26px; background:var(--card); border:1px solid var(--line); border-radius:6px; font-size:13px; }
+  .card:hover .related { display:block; }
+  .pick label.sel { display:flex; gap:8px; align-items:center; cursor:pointer; }
   .card label.sel { display:flex; gap:8px; align-items:center; cursor:pointer; }
   .fact.unknown .v { font-weight:400; color:var(--muted); }
   .fact.changed { border-color:var(--flag-line); background:var(--flag-bg); }
@@ -61,6 +70,10 @@
   .reason { font-size:13.5px; margin:6px 0 0; white-space:pre-line; }
   textarea, select, input[type=text] { font:inherit; width:100%; border:1px solid var(--line); border-radius:7px; padding:7px; margin-bottom:8px; }
   textarea { min-height:90px; resize:vertical; }
+  details.history { border-top:1px solid var(--line); margin-top:14px; }
+  details.history summary { color:var(--muted); margin:12px 0 4px; }
+  .row.past { align-items:flex-start; }
+  .row.past .reason { color:var(--muted); margin-top:2px; }
   details summary { cursor:pointer; font-weight:600; font-size:14px; margin:18px 0 8px; }
   .task.done .title { text-decoration:line-through; color:var(--muted); }
   .overdue { color:var(--warn); }
@@ -73,16 +86,23 @@
 <body>
 <div class="top">
   <header>
-    <h1 id="event-name">Event Cascade Agent</h1>
+    <select id="event-pick" title="Switch event"></select>
+    <button id="new-event-btn">New event</button>
     <span class="sub" id="event-sub">One change in, every dependent task updated.</span>
-    <button id="reset">Reset demo</button>
+    <button id="reset">Reset this event</button>
   </header>
+  <form id="new-event" hidden>
+    <input type="text" id="new-name" placeholder="Event name">
+    <select id="new-type"></select>
+    <button class="primary" type="submit">Create event</button>
+    <button type="button" id="new-cancel">Cancel</button>
+  </form>
   <nav>
     <a href="#updates" data-tab="updates">Updates</a>
     <a href="#template" data-tab="template">Template <span id="template-count"></span></a>
   </nav>
   <div id="facts-window">
-    <h2>Event facts <span style="text-transform:none; letter-spacing:0; font-weight:400">· click a value to change it</span></h2>
+    <h2>Event facts <span style="text-transform:none; letter-spacing:0; font-weight:400">· click a value to change it, or empty it to leave it blank</span></h2>
     <div id="board"></div>
   </div>
 </div>
@@ -95,7 +115,7 @@
       <h2>Incoming</h2>
       <div class="muted" style="margin-bottom:6px">New emails, call transcripts and contracts for the agent to read.</div>
       <div id="incoming"></div>
-      <details>
+      <details id="paste-box">
         <summary>Paste something else</summary>
         <select id="kind"><option value="email">Email</option><option value="transcript">Meeting transcript</option><option value="contract">Contract / quote</option><option value="web">Venue web page</option></select>
         <input type="text" id="sender" placeholder="From (optional)">
@@ -110,6 +130,7 @@
       <h2>Changes and affected tasks</h2>
       <div id="proposals"></div>
       <div id="affected"></div>
+      <div id="completed"></div>
     </section>
   </div>
 
@@ -117,6 +138,7 @@
     <section>
       <h2>Template checklist</h2>
       <div id="tasks"></div>
+      <div id="set-aside"></div>
     </section>
   </div>
 </main>
@@ -126,7 +148,10 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-let S = null;
+let S = null, current = null;         // current = id of the event being shown
+try { current = localStorage.getItem("event"); } catch {}
+const openSections = new Set();      // expandable sections the user has opened
+const pickedTasks = new Set();       // tasks to re-check the user has ticked
 const unpicked = new Set();          // proposed changes the user has unticked
 
 function toast(msg, error) {
@@ -135,10 +160,13 @@ function toast(msg, error) {
 }
 
 async function api(path, body) {
+  path += (path.includes("?") ? "&" : "?") + "event=" + (current || "");
   const res = await fetch(path, body === undefined ? {} : {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
   const data = await res.json();
   if (data.error) { toast(data.error, true); return null; }
-  S = data; render(); return data;
+  S = data; current = S.event.id;
+  try { localStorage.setItem("event", current); } catch {}
+  render(); return data;
 }
 
 function showTab() {
@@ -150,36 +178,55 @@ function showTab() {
 window.addEventListener("hashchange", showTab);
 
 // One look for a task that needs a re-check, used on both tabs.
+// The "Check against: ..." facts are tucked away and shown when the mouse is over the card.
 function recheckCard(t) {
-  const standard = !!t.template_id;
+  const lines = (t.flag_reason || "").split("\n").map(line => {
+    const [main, related] = line.split(". Check against: ");
+    return `<p class="reason">${esc(main)}${related ? `<span class="more"> · related facts</span>` : ""}</p>`
+      + (related ? `<ul class="related">${related.split("; ").map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : "");
+  }).join("");
   return `<div class="card recheck">
-      <span class="tag">${standard ? "Re-check" : "Added"}</span> <strong>${esc(t.title)}</strong>
+      <label class="sel"><input type="checkbox" data-picktask="${t.id}" ${pickedTasks.has(t.id) ? "checked" : ""}>
+        <strong>${esc(t.title)}</strong> <span class="tag">${t.template_id ? "Re-check" : "Added"}</span></label>
       <div class="muted">${esc(t.owner_role || "")}${t.due_display ? " · due " + esc(t.due_display) : ""}</div>
-      <p class="reason">${esc(t.flag_reason)}</p>
-      <div class="actions"><button class="primary" data-task="${t.id}" data-status="${standard ? "ok" : "done"}">${standard ? "Checked, still fine" : "Handled"}</button>
-        <button data-task="${t.id}" data-status="dismissed">Not relevant</button></div>
+      ${lines}
     </div>`;
+}
+
+// Tick tasks, then close them together.
+function taskBar(flagged) {
+  if (!flagged.length) return "";
+  const n = flagged.filter(t => pickedTasks.has(t.id)).length;
+  return `<div class="pick"><label class="sel"><input type="checkbox" data-pickall ${n === flagged.length ? "checked" : ""}>
+      <strong>${plural(flagged.length, "task")} to re-check</strong></label><span class="grow"></span>
+    <button class="primary" data-bulk="resolve" ${n ? "" : "disabled"}>Mark checked as done (${n})</button>
+    <button data-bulk="dismissed" ${n ? "" : "disabled"}>Not relevant</button></div>`;
 }
 
 function render() {
   const flagged = S.tasks.filter(t => t.status === "needs_recheck");
   const known = S.board.filter(f => f.display).length;
-  $("event-name").textContent = S.event.name;
+  $("event-pick").innerHTML = S.events.map(ev => `<option value="${ev.id}" ${ev.id === S.event.id ? "selected" : ""}>${esc(ev.name)}</option>`).join("");
+  $("new-type").innerHTML = S.event_types.map(t => `<option>${esc(t)}</option>`).join("");
+  document.title = S.event.name;
   $("event-sub").textContent = `${S.event.type} · ${known} of ${S.board.length} facts known · ${plural(flagged.length, "task")} to re-check`;
   $("template-count").innerHTML = flagged.length ? `<span class="count">${flagged.length}</span>` : "";
   $("notice").innerHTML = S.notice ? `<div class="notice">${esc(S.notice)}</div>` : "";
 
-  $("board").innerHTML = S.board.map(f => `
+  const groups = [...new Set(S.board.map(f => f.group))];
+  $("board").innerHTML = groups.map(g => `<div class="group"><div class="name">${esc(g)}</div><div class="cells">` + S.board.filter(f => f.group === g).map(f => `
     <div class="fact ${f.pending ? "pending" : f.was ? "changed" : ""} ${f.display ? "" : "unknown"}" data-key="${esc(f.key)}" data-edit="${esc(f.edit)}" title="${esc(f.display ? `${f.source || ""}${f.quote ? ': "' + f.quote + '"' : ""}` : "")}">
       <div class="k">${esc(f.label)}</div>
-      <div class="v">${esc(f.display || "not known yet")}</div>
+      <div class="v">${esc(f.display || "—")}</div>
       ${f.pending ? '<div class="was">change waiting for approval</div>' : f.was ? `<div class="was">was ${esc(f.was)}</div>` : ""}
-    </div>`).join("");
+    </div>`).join("") + "</div></div>").join("");
 
   const sampleRow = s => `<div class="row"><div class="grow">${esc(s.title)}<div class="muted">${esc(s.kind)}${s.baseline ? " · starting information" : ""}</div></div>
     ${s.ingested ? '<span class="tag">read</span>' : `<button data-sample="${esc(s.file)}">Read</button>`}</div>`;
   const waiting = S.samples.filter(s => !s.ingested), read = S.samples.filter(s => s.ingested);
-  $("incoming").innerHTML = waiting.map(sampleRow).join("") || '<div class="empty">Nothing waiting.</div>';
+  $("incoming").innerHTML = waiting.map(sampleRow).join("")
+    || `<div class="empty">${S.samples.length ? "Nothing waiting." : "Paste an email, transcript or contract below."}</div>`;
+  if (!S.samples.length) $("paste-box").open = true;
   $("already").innerHTML = read.map(sampleRow).join("") || '<div class="empty">Nothing yet.</div>';
 
   const ids = S.proposals.map(p => p.id);
@@ -198,14 +245,29 @@ function render() {
         · ${plural(p.affects, "task")} depend${p.affects === 1 ? "s" : ""} on this</div>
       ${p.old_backing ? `<div class="muted">${plural(p.old_backing, "source")} so far said ${esc(p.old_display)}; ${p.new_backing} now say${p.new_backing === 1 ? "s" : ""} ${esc(p.display)}. Check this is a real change and not a typo.</div>` : ""}
     </div>`).join("");
-  $("affected").innerHTML = flagged.map(recheckCard).join("")
+  [...pickedTasks].forEach(id => flagged.some(t => t.id === id) || pickedTasks.delete(id));
+  $("affected").innerHTML = taskBar(flagged) + flagged.map(recheckCard).join("")
     || (S.proposals.length ? "" : '<div class="empty">Nothing needs attention. Read an incoming item to see what it changes.</div>');
+
+  // Completed: re-checks and added tasks that were dealt with, plus changes already decided
+  const outcome = t => t.status === "dismissed" ? "Not relevant" : t.template_id ? "Checked" : "Handled";
+  const pastRow = t => `<div class="row past"><span class="tag">${outcome(t)}</span>
+      <div class="grow">${esc(t.title)}<p class="reason">${esc(t.flag_reason || "")}</p></div>
+      <button data-task="${t.id}" data-status="needs_recheck">Reopen</button></div>`;
+  const resolved = S.tasks.filter(t => t.flag_reason && t.status !== "needs_recheck");
+  const history = (id, title, body) => body ? `<details class="history" data-section="${id}" ${openSections.has(id) ? "open" : ""}><summary>${title}</summary><div>${body}</div></details>` : "";
+  $("completed").innerHTML =
+    history("done", `Completed (${resolved.length})`, resolved.map(pastRow).join(""))
+    + history("decided", `Changes decided (${S.decided.length})`, S.decided.map(d => `<div class="row past"><span class="tag">${d.outcome}</span>
+      <div class="grow">${esc(d.label)}: ${esc(d.display)}<div class="muted">${esc(d.source)}</div></div></div>`).join(""));
+  const dismissed = S.tasks.filter(t => t.status === "dismissed");
+  $("set-aside").innerHTML = history("dismissed", `Marked not relevant (${dismissed.length})`, dismissed.map(pastRow).join(""));
 
   // Template tab: the whole checklist, with the same highlight on tasks to re-check
   const shown = S.tasks.filter(t => t.status !== "dismissed");
   const stageOf = t => t.template_id ? (t.stage || "Other") : "Added for this event";
   const stages = [...new Set(shown.map(stageOf))].sort((a, b) => (b === "Added for this event") - (a === "Added for this event"));
-  $("tasks").innerHTML = stages.map(stage => `<h3>${esc(stage)}</h3><div>` + shown.filter(t => stageOf(t) === stage).map(t =>
+  $("tasks").innerHTML = taskBar(flagged) + stages.map(stage => `<h3>${esc(stage)}</h3><div>` + shown.filter(t => stageOf(t) === stage).map(t =>
     t.status === "needs_recheck" ? recheckCard(t) : `
     <label class="row task ${t.status}"><input type="checkbox" data-task="${t.id}" data-status="${t.status === "done" ? "ok" : "done"}" ${t.status === "done" ? "checked" : ""}>
       <span class="grow title">${esc(t.title)}<div class="muted">${esc(t.owner_role || "")}</div></span>
@@ -214,6 +276,7 @@ function render() {
 
 function summarize(r) {
   if (!r) return "Done";
+  if (r.closed) return `${plural(r.closed, "task")} moved to Completed`;
   const parts = [];
   if (!(r.new || r.proposed) && !r.flagged?.length && !r.added?.length) return "No tasks affected";
   if (r.new?.length) parts.push(plural(r.new.length, "new fact"));
@@ -233,6 +296,12 @@ document.addEventListener("click", e => {
   const cell = e.target.closest(".fact");
   if (cell && !cell.querySelector("input")) return editFact(cell);
   const b = e.target.closest("button, input[type=checkbox]"); if (!b) return;
+  if (b.dataset.picktask) { b.checked ? pickedTasks.add(+b.dataset.picktask) : pickedTasks.delete(+b.dataset.picktask); return render(); }
+  if ("pickall" in b.dataset) {
+    S.tasks.filter(t => t.status === "needs_recheck").forEach(t => b.checked ? pickedTasks.add(t.id) : pickedTasks.delete(t.id));
+    return render();
+  }
+  if (b.dataset.bulk) return withBusy(b, "Working…", () => api("/api/tasks/status", {ids: [...pickedTasks], status: b.dataset.bulk}));
   if (b.dataset.pick) { b.checked ? unpicked.delete(+b.dataset.pick) : unpicked.add(+b.dataset.pick); return render(); }
   if (b.id === "approve-picked" || b.id === "reject-picked") {
     const ids = S.proposals.map(p => p.id).filter(id => !unpicked.has(id));
@@ -243,7 +312,7 @@ document.addEventListener("click", e => {
   else if (b.id === "paste-btn") withBusy(b, "Reading…", async () => {
     const d = await api("/api/ingest", {kind: $("kind").value, sender: $("sender").value, text: $("text").value});
     if (d) $("text").value = ""; return d; });
-  else if (b.id === "reset" && confirm("Clear everything and reload the starting information?")) api("/api/reset", {});
+  else if (b.id === "reset" && confirm(`Clear all sources, facts and task progress for "${S.event.name}"?`)) api("/api/reset", {});
 });
 
 // Click a fact to type a new value. Enter saves it to the database; Esc cancels.
@@ -255,15 +324,28 @@ function editFact(cell) {
   const finish = async save => {
     if (finished) return; finished = true;
     const value = input.value.trim();
-    if (save && value && value !== cell.dataset.edit) {
+    if (save && value !== cell.dataset.edit) {        // an empty box clears the fact
       const d = await api("/api/facts/set", {key: cell.dataset.key, value});
-      if (d) return toast("Saved. " + summarize(d.result));
+      if (d) return toast(value ? "Saved. " + summarize(d.result) : "Cleared");
     }
     render();
   };
   input.addEventListener("keydown", e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); });
   input.addEventListener("blur", () => finish(false));
 }
+
+document.addEventListener("toggle", e => {          // remember which sections are open across refreshes
+  const id = e.target.dataset?.section; if (!id) return;
+  e.target.open ? openSections.add(id) : openSections.delete(id);
+}, true);
+$("event-pick").addEventListener("change", e => { current = e.target.value; unpicked.clear(); api("/api/state"); });
+$("new-event-btn").addEventListener("click", () => { $("new-event").hidden = false; $("new-name").focus(); });
+$("new-cancel").addEventListener("click", () => { $("new-event").hidden = true; });
+$("new-event").addEventListener("submit", async e => {
+  e.preventDefault();
+  const d = await api("/api/events", {name: $("new-name").value, type: $("new-type").value});
+  if (d) { $("new-event").hidden = true; $("new-name").value = ""; toast(`Created with ${plural(S.tasks.length, "task")} from the ${S.event.type} template`); }
+});
 
 showTab();
 api("/api/state");

@@ -110,10 +110,14 @@ def _cite(conn, fact):
 def create_event(conn, name, event_type):
     """Create the event and its checklist from the org's standard task templates."""
     event_id = conn.execute("INSERT INTO events(name, type) VALUES (?, ?)", (name, event_type)).lastrowid
+    add_template_tasks(conn, event_id, event_type)
+    return event_id
+
+
+def add_template_tasks(conn, event_id, event_type):
     for t in conn.execute("SELECT * FROM task_templates WHERE event_type = ?", (event_type,)).fetchall():
         conn.execute("INSERT INTO tasks(event_id, template_id, title, stage, owner_role) VALUES (?,?,?,?,?)",
                      (event_id, t["id"], title_case(t["title"]), t["stage"], t["owner_role"]))
-    return event_id
 
 
 def _set_due_dates(conn, event_id, start):
@@ -157,11 +161,18 @@ def record_facts(conn, event_id, source_id, extracted):
     src = conn.execute("SELECT received_at FROM sources WHERE id = ?", (source_id,)).fetchone()
     out = {"new": [], "proposed": [], "unchanged": [], "ignored": []}
 
+    batch_start = next((f.get("value") for f in extracted if f.get("key") == "event_start_date"), None)
     for f in extracted:
         key, value = f.get("key"), str(f.get("value", "")).strip()
         if key not in valid or not value:
             out["ignored"].append(key)
             continue
+        if key == "event_end_date":
+            # the end date stays blank unless the event really runs past its start date
+            start = batch_start or (current_facts(conn, event_id).get("event_start_date") or {"value": None})["value"]
+            if start and same_value(start, value):
+                out["unchanged"].append(key)
+                continue
         if _date(value):
             value = _date(value).isoformat()           # one stored format, whatever the source wrote
         cur = current_facts(conn, event_id).get(key)
@@ -215,12 +226,15 @@ def approve(conn, fact_id):
 
 def set_fact(conn, event_id, key, value):
     """A person typed a new value for a fact: store it, with them as the source, and cascade."""
-    value = str(value).strip()
+    value = str(value or "").strip()
     if not conn.execute("SELECT 1 FROM fact_keys WHERE key = ?", (key,)).fetchone():
         raise ValueError(f"Unknown fact '{key}'")
-    if not value:
-        raise ValueError("Type a value first")
     old = current_facts(conn, event_id).get(key)
+    if not value:
+        # blank = no value on file; the old value is kept as history
+        if old:
+            conn.execute("UPDATE facts SET status = 'superseded' WHERE id = ?", (old["id"],))
+        return {"flagged": [], "added": [], "cleared": bool(old)}
     if _date(value):
         value = _date(value).isoformat()
     elif old and _date(old["value"]):

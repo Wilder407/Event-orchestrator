@@ -10,6 +10,7 @@ import sys
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import cascade
 from init_db import get_conn, init_db
@@ -28,9 +29,10 @@ def parse_sample(path):
             "baseline": meta.get("baseline", "").lower() == "yes"}
 
 
-def get_event(conn):
-    """The MVP tracks one event; create the demo event on first use."""
-    row = conn.execute("SELECT * FROM events ORDER BY id LIMIT 1").fetchone()
+def get_event(conn, event_id=None):
+    """The chosen event, else the first one; the demo event is created on first use."""
+    row = conn.execute("SELECT * FROM events WHERE id = ?", (event_id,)).fetchone() if event_id else None
+    row = row or conn.execute("SELECT * FROM events ORDER BY id LIMIT 1").fetchone()
     if row:
         return row
     if not conn.execute("SELECT 1 FROM task_templates LIMIT 1").fetchone():
@@ -55,8 +57,24 @@ def load_baseline(conn, event_id):
             NOTICE["text"] = f"Could not load starting information from {s['title']}: {e}"
 
 
-def state(conn):
-    event = get_event(conn)
+def is_demo(event):
+    return event["name"] == DEMO_EVENT[0]
+
+
+def new_event(conn, name, event_type):
+    name = (name or "").strip()
+    types = [r[0] for r in conn.execute("SELECT DISTINCT event_type FROM task_templates")]
+    if not name:
+        raise ValueError("Give the event a name")
+    if event_type not in types:
+        raise ValueError(f"Pick a template: {', '.join(types)}")
+    if conn.execute("SELECT 1 FROM events WHERE name = ?", (name,)).fetchone():
+        raise ValueError("There is already an event with that name")
+    return {"switch_to": cascade.create_event(conn, name, event_type)}
+
+
+def state(conn, event_id=None):
+    event = get_event(conn, event_id)
     eid = event["id"]
     facts = conn.execute(
         """SELECT f.*, s.kind AS source_kind, s.sender AS source_sender FROM facts f
@@ -88,27 +106,40 @@ def state(conn):
     by_key = {f["key"]: f for f in facts if f["status"] == "confirmed"}
     pending_keys = {p["key"] for p in proposals}
     board = []
-    for (key,) in conn.execute("SELECT key FROM fact_keys ORDER BY rowid").fetchall():
+    for key, group in conn.execute("SELECT key, grp FROM fact_keys ORDER BY position, rowid").fetchall():
         prev = conn.execute(
             "SELECT value, unit FROM facts WHERE event_id = ? AND key = ? AND status = 'superseded' ORDER BY id DESC LIMIT 1",
             (eid, key)).fetchone()
         f = by_key.get(key)
         board.append({
-            "key": key, "label": cascade.label(key), "display": f["display"] if f else None,
+            "key": key, "group": group or "Other", "label": cascade.label(key), "display": f["display"] if f else None,
             # what the edit box starts with: the date as shown, otherwise the bare value
             "edit": (f["display"] if cascade._date(f["value"]) else f["value"]) if f else "",
-            "was": cascade.fmt(prev["value"], prev["unit"]) if f and prev else None,
+            "was": cascade.fmt(prev["value"], prev["unit"]) if prev else None,
             "pending": key in pending_keys, "quote": f["quote"] if f else None,
             "source": " from ".join(x for x in (f["source_kind"], f["source_sender"]) if x) if f else None,
         })
     tasks = conn.execute("SELECT * FROM tasks WHERE event_id = ? ORDER BY due_date IS NULL, due_date, id", (eid,)).fetchall()
     sources = conn.execute("SELECT id, kind, sender, received_at, raw_text FROM sources WHERE event_id = ? ORDER BY id", (eid,)).fetchall()
     ingested = {s["raw_text"] for s in sources}
-    samples = [parse_sample(p) for p in sorted(SAMPLES.glob("*.txt"))]
+    # changes a person has already decided on: any fact row that came after the first for its key
+    decided = [{"label": cascade.label(r["key"]), "display": cascade.fmt(r["value"], r["unit"]),
+                "outcome": "Ignored" if r["status"] == "rejected" else "Approved",
+                "source": " from ".join(x for x in (r["kind"], r["sender"]) if x)}
+               for r in conn.execute(
+                   """SELECT f.*, s.kind, s.sender FROM facts f LEFT JOIN sources s ON s.id = f.source_id
+                      WHERE f.event_id = ? AND f.status != 'proposed'
+                        AND f.id > (SELECT MIN(id) FROM facts WHERE event_id = f.event_id AND key = f.key)
+                      ORDER BY f.id DESC""", (eid,))]
+    # the sample documents are about the demo event; other events use the paste box
+    samples = [parse_sample(p) for p in sorted(SAMPLES.glob("*.txt"))] if is_demo(event) else []
     return {
         "event": dict(event),
+        "events": [dict(r) for r in conn.execute("SELECT id, name, type FROM events ORDER BY id")],
+        "event_types": [r[0] for r in conn.execute("SELECT DISTINCT event_type FROM task_templates ORDER BY 1")],
         "today": datetime.now().date().isoformat(),
         "proposals": proposals,
+        "decided": decided,
         "notice": NOTICE["text"],
         "board": board,
         "facts": [f for f in facts if f["status"] == "confirmed"],
@@ -118,8 +149,8 @@ def state(conn):
     }
 
 
-def ingest(conn, kind, sender, received_at, text):
-    return _ingest(conn, get_event(conn)["id"], kind, sender, received_at, text)
+def ingest(conn, event_id, kind, sender, received_at, text):
+    return _ingest(conn, get_event(conn, event_id)["id"], kind, sender, received_at, text)
 
 
 def _ingest(conn, event_id, kind, sender, received_at, text):
@@ -136,9 +167,17 @@ def _ingest(conn, event_id, kind, sender, received_at, text):
     return cascade.record_facts(conn, event_id, source_id, extracted)
 
 
-def reset(conn):
-    for table in ("tasks", "fact_mentions", "facts", "sources", "events"):
-        conn.execute(f"DELETE FROM {table}")
+def reset(conn, event_id):
+    """Put one event back to its starting state: template tasks, plus starting information for the demo."""
+    event = get_event(conn, event_id)
+    eid = event["id"]
+    conn.execute("DELETE FROM tasks WHERE event_id = ?", (eid,))
+    conn.execute("DELETE FROM fact_mentions WHERE fact_id IN (SELECT id FROM facts WHERE event_id = ?)", (eid,))
+    conn.execute("DELETE FROM facts WHERE event_id = ?", (eid,))
+    conn.execute("DELETE FROM sources WHERE event_id = ?", (eid,))
+    cascade.add_template_tasks(conn, eid, event["type"])
+    if is_demo(event):
+        load_baseline(conn, eid)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -153,18 +192,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/":
             return self._send((HERE / "static" / "index.html").read_bytes(), ctype="text/html; charset=utf-8")
-        if self.path == "/api/state":
-            return self._run(lambda conn, body: state(conn))
+        if urlsplit(self.path).path == "/api/state":
+            return self._run(lambda conn, body, eid: state(conn, eid))
         self._send({"error": "Not found"}, 404)
 
     def do_POST(self):
-        parts = self.path.strip("/").split("/")          # api/facts/12/approve
+        parts = urlsplit(self.path).path.strip("/").split("/")          # api/tasks/12/status
         routes = {
-            ("ingest",): lambda c, b: ingest(c, **(parse_sample_fields(b))),
-            ("reset",): lambda c, b: reset(c),
-            ("facts", "set"): lambda c, b: cascade.set_fact(c, get_event(c)["id"], b.get("key"), b.get("value", "")),
-            ("facts", "approve"): lambda c, b: decide_many(c, b.get("ids") or [], cascade.approve),
-            ("facts", "reject"): lambda c, b: decide_many(c, b.get("ids") or [], cascade.reject),
+            ("ingest",): lambda c, b, eid: ingest(c, eid, **(parse_sample_fields(b))),
+            ("reset",): lambda c, b, eid: reset(c, eid),
+            ("events",): lambda c, b, eid: new_event(c, b.get("name"), b.get("type")),
+            ("tasks", "status"): lambda c, b, eid: set_many_tasks(c, b.get("ids") or [], b.get("status")),
+            ("facts", "set"): lambda c, b, eid: cascade.set_fact(c, get_event(c, eid)["id"], b.get("key"), b.get("value", "")),
+            ("facts", "approve"): lambda c, b, eid: decide_many(c, b.get("ids") or [], cascade.approve),
+            ("facts", "reject"): lambda c, b, eid: decide_many(c, b.get("ids") or [], cascade.reject),
         }
         if parts[:1] != ["api"]:
             return self._send({"error": "Not found"}, 404)
@@ -172,21 +213,24 @@ class Handler(BaseHTTPRequestHandler):
             return self._run(routes[tuple(parts[1:])])
         if len(parts) == 4 and parts[1] == "facts" and parts[3] in ("approve", "reject"):
             fn = cascade.approve if parts[3] == "approve" else cascade.reject
-            return self._run(lambda c, b: fn(c, int(parts[2])))
+            return self._run(lambda c, b, eid: fn(c, int(parts[2])))
         if len(parts) == 4 and parts[1] == "tasks" and parts[3] == "status":
-            return self._run(lambda c, b: set_task_status(c, int(parts[2]), b.get("status")))
+            return self._run(lambda c, b, eid: set_task_status(c, int(parts[2]), b.get("status")))
         self._send({"error": "Not found"}, 404)
 
     def _run(self, fn):
         try:
             length = int(self.headers.get("Content-Length") or 0)
             body = json.loads(self.rfile.read(length)) if length else {}
+            event_id = (parse_qs(urlsplit(self.path).query).get("event") or [None])[0]   # ?event=3
             conn = get_conn()
             try:
                 with conn:                                # commit on success, roll back on error
-                    result = fn(conn, body)
+                    result = fn(conn, body, event_id)
+                if isinstance(result, dict) and result.get("switch_to"):
+                    event_id = result["switch_to"]
                 with conn:
-                    out = state(conn) if self.command == "POST" else result
+                    out = state(conn, event_id) if self.command == "POST" else result
                     if self.command == "POST":
                         out["result"] = result
             finally:
@@ -222,8 +266,19 @@ def decide_many(conn, ids, fn):
     return {"flagged": sorted(total["flagged"]), "added": total["added"]}
 
 
+def set_many_tasks(conn, ids, status):
+    """Close several flagged tasks at once. 'resolve' = checked (standard task) or handled (added task)."""
+    if not ids:
+        raise ValueError("Tick at least one task first")
+    for task_id in ids:
+        t = conn.execute("SELECT template_id FROM tasks WHERE id = ?", (int(task_id),)).fetchone()
+        if t:
+            set_task_status(conn, int(task_id), status if status != "resolve" else ("ok" if t["template_id"] else "done"))
+    return {"closed": len(ids)}
+
+
 def set_task_status(conn, task_id, status):
-    if status not in ("ok", "done", "dismissed"):
+    if status not in ("ok", "done", "dismissed", "needs_recheck"):
         raise ValueError(f"Unknown status {status}")
     conn.execute("UPDATE tasks SET status = ? WHERE id = ?", (status, task_id))
 

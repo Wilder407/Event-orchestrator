@@ -32,6 +32,15 @@ given so you can resolve phrases like "next Thursday")
 in unit ("guests", "USD", "%", "minutes")
 - everything else as a short plain phrase
 
+Keys that are easy to confuse:
+- event_end_date: only when the event ends on a later date than it starts. Leave \
+it out for a single-day event.
+- headcount_expected is how many guests are being planned for. headcount_guaranteed \
+is the number formally committed to the venue or caterer. headcount_guarantee_deadline \
+is the date that commitment is due.
+- deposit_due_date is when a deposit must be paid; cancellation_deadline is the last \
+date to cancel without penalty.
+
 You may be given the values already on file for this event. When the document says \
 the same thing as a value on file, in any wording or level of detail, return the \
 value on file exactly as written so it is not mistaken for a change. Return a \

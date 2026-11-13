@@ -28,12 +28,13 @@ def clean(v):
 
 
 def load_fact_keys(wb):
-    keys = []
-    for (v,) in wb["fact_sheet"].iter_rows(min_col=1, max_col=1, values_only=True):
-        v = clean(v)
-        if v and v not in NOT_FACTS:
-            keys.append(v)
-    return keys
+    """fact_sheet columns: Fact key | Group. Returns [(key, group, position)] in sheet order."""
+    rows = []
+    for key, group in wb["fact_sheet"].iter_rows(min_row=2, min_col=1, max_col=2, values_only=True):
+        key = clean(key)
+        if key and key not in NOT_FACTS:
+            rows.append((key, clean(group) or "Other", len(rows)))
+    return rows
 
 
 def load_templates(ws, valid_keys, warnings):
@@ -108,7 +109,8 @@ def main():
     wb = openpyxl.load_workbook(XLSX, data_only=True)
     warnings = []
 
-    keys = load_fact_keys(wb)
+    fact_rows = load_fact_keys(wb)
+    keys = [k for k, _, _ in fact_rows]
     templates = []
     for ws in wb.worksheets:
         if ws.title.startswith("task_template"):
@@ -116,7 +118,7 @@ def main():
     considerations = load_considerations(wb["considerations"], set(keys), warnings)
 
     with get_conn() as conn:
-        conn.executemany("INSERT OR IGNORE INTO fact_keys(key) VALUES (?)", [(k,) for k in keys])
+        conn.executemany("INSERT OR REPLACE INTO fact_keys(key, grp, position) VALUES (?,?,?)", fact_rows)
         conn.executemany(
             """INSERT OR REPLACE INTO task_templates
                (code, event_type, stage, owner_role, title, notes, depends_on, due_offset_days)

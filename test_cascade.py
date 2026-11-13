@@ -112,6 +112,15 @@ try:
 except ValueError:
     pass
 
+# 4e. End date is optional: same-day end dates are not stored, and any fact can be blanked
+r = cascade.record_facts(conn, eid, source("email", "Venue", "2026-11-15"), [
+    fact("event_start_date", "2027-05-14"), fact("event_end_date", "2027-05-14")])
+assert "event_end_date" not in cascade.current_facts(conn, eid) and not r["proposed"], r
+cascade.set_fact(conn, eid, "event_end_date", "05-15-2027")
+assert cascade.current_facts(conn, eid)["event_end_date"]["value"] == "2027-05-15"
+cascade.set_fact(conn, eid, "event_end_date", "")
+assert "event_end_date" not in cascade.current_facts(conn, eid)
+
 # 5. Reject leaves the current value alone
 cascade.record_facts(conn, eid, source("email", "Someone", "2026-11-14"), [fact("fb_minimum", "12000", "USD")])
 pid = conn.execute("SELECT id FROM facts WHERE key='fb_minimum' AND status='proposed'").fetchone()[0]
