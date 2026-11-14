@@ -58,3 +58,4 @@ in `extract_cache/`, so a second run is instant and works offline.
 | `app.py`, `static/index.html` | Review screen |
 | `samples/` | Demo sources |
 | `test_cascade.py` | Checks the cascade without calling Claude: `python test_cascade.py` |
+| `eval.py`, `expected_facts.json` | Scores extraction on the samples: `python eval.py` (writes `eval_results.md`) |

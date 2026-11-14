@@ -1,0 +1,85 @@
+{
+  "_how_to_read": "For each sample: 'expected' facts must be found with the right value; 'optional' keys may appear or not without counting against the score. Any other fact whose value differs from what is already on file counts as a false change. A value can be exact (compared the way cascade.py compares values), {\"contains\": [...]} (every word must appear) or {\"contains_any\": [...]} (at least one must appear).",
+
+  "01_venue_contract.txt": {
+    "expected": {
+      "event_start_date": "2027-02-18",
+      "event_start_time": "18:00",
+      "event_end_time": "21:00",
+      "venue_name": {"contains": ["foundry loft"]},
+      "venue_indoor_outdoor": {"contains": ["indoor"]},
+      "venue_capacity_seated": "120",
+      "fb_minimum": "9000",
+      "headcount_guarantee_deadline": "2027-02-04",
+      "attrition_pct": "10",
+      "cancellation_deadline": "2027-01-19",
+      "parking_type": {"contains": ["valet"]}
+    },
+    "optional": ["guest_arrival_time", "event_complexity", "catering_style"]
+  },
+
+  "02_kickoff_email.txt": {
+    "expected": {
+      "headcount_expected": "100",
+      "out_of_town_attendees": "15",
+      "budget_total": "25000",
+      "catering_style": {"contains": ["plated"]},
+      "dietary_needs": {"contains": ["vegetarian", "gluten"]},
+      "speaker_details": {"contains": ["okafor"]},
+      "guest_arrival_time": "17:30",
+      "registration_duration": "30"
+    },
+    "optional": ["event_start_date", "event_start_time", "venue_name", "event_complexity"]
+  },
+
+  "03_planning_call_transcript.txt": {
+    "expected": {
+      "headcount_expected": "150",
+      "av_needs": {"contains": ["mic", "projector"]}
+    },
+    "optional": ["speaker_details"]
+  },
+
+  "04_date_change_email.txt": {
+    "expected": {
+      "event_start_date": "2027-05-13",
+      "headcount_guarantee_deadline": "2027-04-29",
+      "cancellation_deadline": "2027-04-13"
+    },
+    "optional": ["event_start_time", "event_end_time", "venue_name"]
+  },
+
+  "05_catering_quote.txt": {
+    "expected": {
+      "deposit_due_date": "2026-12-15",
+      "catering_style": {"contains": ["plated"]}
+    },
+    "optional": ["headcount_expected", "headcount_guaranteed", "event_start_date", "fb_minimum", "dietary_needs", "venue_name"]
+  },
+
+  "06_hotel_block_email.txt": {
+    "expected": {
+      "out_of_town_attendees": "28"
+    },
+    "optional": []
+  },
+
+  "07_venue_newsletter.txt": {
+    "expected": {},
+    "optional": []
+  },
+
+  "08_parking_change_email.txt": {
+    "expected": {
+      "parking_type": {"contains_any": ["self", "garage"]}
+    },
+    "optional": ["event_start_date", "venue_name"]
+  },
+
+  "09_budget_approval_email.txt": {
+    "expected": {
+      "budget_total": "32000"
+    },
+    "optional": ["headcount_expected"]
+  }
+}
