@@ -35,13 +35,14 @@ Open http://localhost:8000.
 
 1. **Start.** The venue contract and kickoff email (the samples marked `baseline: yes`)
    are read automatically, so the Event facts window at the top is already filled in.
-2. On the **Updates** tab, **Read** the planning call transcript. The agent proposes
+2. Considerations set at the organization level prompt the user to re-check template tasks.
+3. On the **Updates** tab, **Read** the planning call transcript. The agent proposes
    headcount 100 -> 150 and quotes the line from the call. Nothing changes yet.
-3. **Approve.** Every task that depends on headcount appears in the right-hand column
+4. **Approve.** Every task that depends on headcount appears in the right-hand column
    with the reason, plus new items: headcount is over the venue's capacity, and the
    venue needs the new number by the guarantee deadline.
-4. Open the **Template** tab: the same tasks are highlighted inside the full checklist.
-5. **Read** the date-change email and approve the changes. Due dates shift, the
+5. Open the **Template** tab: the same tasks are highlighted inside the full checklist.
+6. **Read** the date-change email and approve the changes. Due dates shift, the
    winter tasks are flagged as no longer needed and the spring tasks are added.
 
 "Reset demo" clears the event so you can run it again. Extraction results are cached
