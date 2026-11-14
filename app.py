@@ -96,6 +96,7 @@ def state(conn, event_id=None):
                 """SELECT COUNT(*) FROM tasks t JOIN task_templates tt ON tt.id = t.template_id, json_each(tt.depends_on) d
                    WHERE t.event_id = ? AND t.status IN ('ok','needs_recheck') AND d.value = ?""",
                 (eid, f["key"])).fetchone()[0]
+            p["related"], p["related_tasks"] = cascade.related_for_change(conn, eid, f["key"], f["value"])
             proposals.append(p)
     for group in (proposals, facts):
         for i, f in enumerate(group):

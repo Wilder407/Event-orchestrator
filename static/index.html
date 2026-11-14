@@ -44,7 +44,7 @@
   .fact:hover { border-color:var(--ink); }
   .fact input { font:inherit; font-weight:600; width:100%; border:1px solid var(--ink); border-radius:5px; padding:1px 5px; margin:0; }
   .pick { display:flex; gap:10px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
-  .reason .more { color:var(--muted); border-bottom:1px dotted var(--muted); cursor:help; white-space:nowrap; }
+  .reason .more, .muted .more { color:var(--muted); border-bottom:1px dotted var(--muted); cursor:help; white-space:nowrap; }
   .related { display:none; margin:6px 0 0; padding:8px 10px 8px 26px; background:var(--card); border:1px solid var(--line); border-radius:6px; font-size:13px; }
   .card:hover .related { display:block; }
   .related .head { list-style:none; margin:6px 0 2px -16px; color:var(--muted); }
@@ -277,6 +277,7 @@ function render() {
   const ids = S.proposals.map(p => p.id);
   [...unpicked].forEach(id => ids.includes(id) || unpicked.delete(id));
   const picked = ids.filter(id => !unpicked.has(id));
+  const li = items => items.map(r => `<li>${esc(r)}</li>`).join("");
   $("proposals").innerHTML = (S.proposals.length ? `
     <div class="pick"><strong>${plural(S.proposals.length, "change")} waiting for approval</strong><span class="grow"></span>
       <button class="primary" id="approve-picked" ${picked.length ? "" : "disabled"}>Approve checked (${picked.length})</button>
@@ -287,7 +288,8 @@ function render() {
         <span class="change" style="margin:0">${esc(p.label)}: ${p.old_display ? `<s>${esc(p.old_display)}</s> → ` : ""}${esc(p.display)}</span></label>
       ${p.quote ? `<blockquote>“${esc(p.quote)}”</blockquote>` : ""}
       <div class="muted">${esc([p.source_kind, p.source_sender].filter(Boolean).join(" from "))}${p.confidence != null && p.confidence < 0.7 ? " · the agent is not sure about this one" : ""}
-        · ${plural(p.affects, "task")} depend${p.affects === 1 ? "s" : ""} on this</div>
+        · ${plural(p.affects, "task")} depend${p.affects === 1 ? "s" : ""} on this${p.related?.length ? `<span class="more"> · related facts${p.related_tasks.length ? " and tasks" : ""}</span>` : ""}</div>
+      ${p.related?.length ? `<ul class="related">${li(p.related)}${p.related_tasks.length ? `<li class="head">Tasks that may be affected</li>${li(p.related_tasks)}` : ""}</ul>` : ""}
       ${p.old_backing ? `<div class="muted">${plural(p.old_backing, "source")} so far said ${esc(p.old_display)}; ${p.new_backing} now say${p.new_backing === 1 ? "s" : ""} ${esc(p.display)}. Check this is a real change and not a typo.</div>` : ""}
     </div>`).join("");
   [...pickedTasks].forEach(id => flagged.some(t => t.id === id) || pickedTasks.delete(id));

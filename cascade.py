@@ -323,21 +323,43 @@ def cascade(conn, event_id, new, old):
     return result
 
 
-def _related(conn, event_id, trig, facts, changed_key):
-    """'. Check against: <related facts>. Tasks that may be affected: <titles>' for a consideration.
+def related_parts(conn, event_id, trig, facts, changed_key):
+    """(related facts as 'label = value', titles of open tasks that depend on them) for a consideration.
 
-    The related facts come from the spreadsheet's 'Related facts' column; the tasks are
-    the open checklist tasks that depend on any of them. Empty when none are listed.
+    The related facts come from the spreadsheet's 'Related facts' column.
     """
     keys = [k for k in trig.get("related", []) if k != changed_key]
     if not keys:
-        return ""
+        return [], []
     values = [f"{label(k)} = {fmt(facts[k]['value'], facts[k]['unit']) if k in facts else 'not on file yet'}"
               for k in keys]
     rows = conn.execute(
         f"""SELECT t.title, tt.depends_on FROM tasks t JOIN task_templates tt ON tt.id = t.template_id
             WHERE t.event_id = ? AND t.status IN {OPEN} ORDER BY t.id""", (event_id,)).fetchall()
-    titles = [r["title"] for r in rows if set(keys) & set(json.loads(r["depends_on"]))]
+    return values, [r["title"] for r in rows if set(keys) & set(json.loads(r["depends_on"]))]
+
+
+def related_for_change(conn, event_id, key, value):
+    """The same two lists for a change that is still waiting for approval, across every
+    consideration it would fire (a season's only if the new date lands in it)."""
+    facts, values, titles = current_facts(conn, event_id), [], []
+    for c in conn.execute("SELECT * FROM considerations").fetchall():
+        trig = json.loads(c["triggers"] or "{}")
+        if key not in trig.get("on_change", []):
+            continue
+        if "season" in trig and not (_date(value) and _season(_date(value)) == trig["season"]):
+            continue
+        v, t = related_parts(conn, event_id, trig, facts, key)
+        values += [x for x in v if x not in values]
+        titles += [x for x in t if x not in titles]
+    return values, titles
+
+
+def _related(conn, event_id, trig, facts, changed_key):
+    """'. Check against: <related facts>. Tasks that may be affected: <titles>', or '' when none are listed."""
+    values, titles = related_parts(conn, event_id, trig, facts, changed_key)
+    if not values:
+        return ""
     text = f". Check against: {'; '.join(values)}"
     return text + (f". Tasks that may be affected: {'; '.join(titles)}" if titles else "")
 

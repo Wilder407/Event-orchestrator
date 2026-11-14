@@ -129,16 +129,28 @@ def main():
     with get_conn() as conn:
         conn.executemany("INSERT OR REPLACE INTO fact_keys(key, grp, position) VALUES (?,?,?)", fact_rows)
         conn.executemany(
-            """INSERT OR REPLACE INTO task_templates
+            # update in place: replacing a row would change its id and orphan existing tasks
+            """INSERT INTO task_templates
                (code, event_type, stage, owner_role, title, notes, depends_on, due_offset_days)
-               VALUES (?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?)
+               ON CONFLICT(code) DO UPDATE SET event_type = excluded.event_type, stage = excluded.stage,
+                   owner_role = excluded.owner_role, title = excluded.title, notes = excluded.notes,
+                   depends_on = excluded.depends_on, due_offset_days = excluded.due_offset_days""",
             templates,
         )
-        conn.execute("DELETE FROM considerations")
-        conn.executemany(
-            "INSERT INTO considerations(title, triggers, action, origin_event, tasks) VALUES (?,?,?,?,?)",
-            considerations,
-        )
+        # Update considerations in place (matched by title) so tasks already added from
+        # them keep pointing at the right row; ones removed from the sheet are unlinked.
+        ids = {r["title"]: r["id"] for r in conn.execute("SELECT id, title FROM considerations")}
+        for title, triggers, action, origin, tasks in considerations:
+            if title in ids:
+                conn.execute("UPDATE considerations SET triggers = ?, action = ?, origin_event = ?, tasks = ? WHERE id = ?",
+                             (triggers, action, origin, tasks, ids.pop(title)))
+            else:
+                conn.execute("INSERT INTO considerations(title, triggers, action, origin_event, tasks) VALUES (?,?,?,?,?)",
+                             (title, triggers, action, origin, tasks))
+        for gone in ids.values():
+            conn.execute("UPDATE tasks SET consideration_id = NULL WHERE consideration_id = ?", (gone,))
+            conn.execute("DELETE FROM considerations WHERE id = ?", (gone,))
 
     print(f"Seeded {len(keys)} fact keys, {len(templates)} task templates, "
           f"{len(considerations)} considerations")
