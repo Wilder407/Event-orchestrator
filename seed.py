@@ -69,16 +69,25 @@ SEASONS = {"winter", "spring", "summer", "fall"}
 
 def load_considerations(ws, valid_keys, warnings):
     """Columns: Consideration | Action | When (season) | Tasks (one per line) |
-    Learned from | Fires when these facts change.
+    Learned from | Fires when these facts change | Related facts.
 
     A row with a season in 'When' adds its tasks whenever the event date lands in
     that season. Other rows add their tasks when any listed fact key changes.
+    'Related facts' are the other facts to check when the row fires: the added tasks
+    show their current values and the checklist tasks that depend on them.
     """
     header = [clean(c.value) for c in ws[1]]
     col = {name: i for i, name in enumerate(header) if name}
 
     def cell(r, name):
         return clean(r[col[name]]) if name in col and col[name] < len(r) else None
+
+    def key_list(r, name, title):
+        keys = [k.strip() for k in (cell(r, name) or "").split(",") if k.strip()]
+        for k in keys:
+            if k not in valid_keys:
+                warnings.append(f"Consideration '{title}': unknown fact key '{k}'")
+        return keys
 
     rows = []
     for r in ws.iter_rows(min_row=2, values_only=True):
@@ -93,14 +102,14 @@ def load_considerations(ws, valid_keys, warnings):
                 continue
             trig = {"on_change": ["event_start_date"], "season": season}
         else:
-            keys = [k.strip() for k in (cell(r, "Fires when these facts change") or "").split(",") if k.strip()]
-            for k in keys:
-                if k not in valid_keys:
-                    warnings.append(f"Consideration '{title}': unknown fact key '{k}'")
+            keys = key_list(r, "Fires when these facts change", title)
             if not keys:
                 warnings.append(f"Consideration '{title}' will never fire: fill in "
                                 f"'When (season)' or 'Fires when these facts change'")
             trig = {"on_change": keys}
+        related = key_list(r, "Related facts", title)
+        if related:
+            trig["related"] = related
         rows.append((title, json.dumps(trig), action, cell(r, "Learned from"), json.dumps(tasks)))
     return rows
 

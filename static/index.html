@@ -47,6 +47,7 @@
   .reason .more { color:var(--muted); border-bottom:1px dotted var(--muted); cursor:help; white-space:nowrap; }
   .related { display:none; margin:6px 0 0; padding:8px 10px 8px 26px; background:var(--card); border:1px solid var(--line); border-radius:6px; font-size:13px; }
   .card:hover .related { display:block; }
+  .related .head { list-style:none; margin:6px 0 2px -16px; color:var(--muted); }
   .pick label.sel { display:flex; gap:8px; align-items:center; cursor:pointer; }
   .card label.sel { display:flex; gap:8px; align-items:center; cursor:pointer; }
   .fact.unknown .v { font-weight:400; color:var(--muted); }
@@ -195,9 +196,11 @@ window.addEventListener("hashchange", showTab);
 // The "Check against: ..." facts are tucked away and shown when the mouse is over the card.
 function recheckCard(t) {
   const lines = (t.flag_reason || "").split("\n").map(line => {
-    const [main, related] = line.split(". Check against: ");
-    return `<p class="reason">${esc(main)}${related ? `<span class="more"> · related facts</span>` : ""}</p>`
-      + (related ? `<ul class="related">${related.split("; ").map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : "");
+    const [main, rest] = line.split(". Check against: ");
+    const [related, affected] = (rest || "").split(". Tasks that may be affected: ");
+    const list = text => text.split("; ").map(r => `<li>${esc(r)}</li>`).join("");
+    return `<p class="reason">${esc(main)}${related ? `<span class="more"> · related facts${affected ? " and tasks" : ""}</span>` : ""}</p>`
+      + (related ? `<ul class="related">${list(related)}${affected ? `<li class="head">Tasks that may be affected</li>${list(affected)}` : ""}</ul>` : "");
   }).join("");
   return `<div class="card recheck">
       <label class="sel"><input type="checkbox" data-picktask="${t.id}" ${pickedTasks.has(t.id) ? "checked" : ""}>

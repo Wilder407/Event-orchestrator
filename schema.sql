@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS task_templates (
 CREATE TABLE IF NOT EXISTS considerations (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     title       TEXT NOT NULL,
-    triggers    TEXT NOT NULL,           -- JSON, e.g. {"on_change":["event_start_date"],"condition":"season_changed"}
+    triggers    TEXT NOT NULL,           -- JSON, e.g. {"on_change":["event_start_date"],"season":"winter","related":["parking_type"]}
     action      TEXT,                    -- e.g. Alert event planner to review
     origin_event TEXT,                   -- where the lesson came from
     tasks       TEXT NOT NULL DEFAULT '[]'  -- JSON list of task titles it adds

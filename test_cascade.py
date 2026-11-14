@@ -49,6 +49,7 @@ r = cascade.record_facts(conn, eid, source("contract", "Venue", "2026-11-02"), [
 assert len(r["new"]) == 4 and r["ignored"] == ["not_a_real_key"], r
 assert "arrange a coat check" in flagged(), "winter date should add the winter tasks"
 assert "Learned from" in flagged()["arrange a coat check"]
+assert "Check against: venue indoor outdoor = not on file yet" in flagged()["arrange a coat check"]
 r = cascade.record_facts(conn, eid, source("email", "Dana", "2026-11-03"), [
     fact("headcount_expected", "100", "guests"), fact("event_start_date", "2027-02-18"),
     fact("budget_total", "25,000", "USD", confidence=0.4),
@@ -78,6 +79,9 @@ assert "vendor contacts" not in f, "task that doesn't depend on headcount was fl
 assert "Headcount 150 Is Over the Venue's Seated Capacity of 120" in r["added"], r["added"]
 assert any("Send the Venue the New Headcount (150) by 02-04-2027" in t for t in r["added"]), r["added"]
 assert "Contact Vendor About Increase or Decrease in Headcount" in r["added"], r["added"]
+why = f["contact vendor about increase or decrease in headcount"]   # names related facts and tasks
+assert "Check against: venue capacity seated = 120 guests" in why and "Learned from: Lunch Panel" in why, why
+assert "Tasks that may be affected: " in why and "Seating Arrangement" in why.split("affected: ")[1], why
 statuses = [x[0] for x in conn.execute("SELECT status FROM facts WHERE key='headcount_expected' ORDER BY id")]
 assert statuses == ["superseded", "confirmed"], statuses
 

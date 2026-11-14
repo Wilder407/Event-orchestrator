@@ -296,11 +296,12 @@ def cascade(conn, event_id, new, old):
         if key not in trig.get("on_change", []):
             continue
         if "season" in trig:
-            _season_consideration(conn, event_id, c, trig["season"], new, old, result)
+            _season_consideration(conn, event_id, c, trig, facts, new, old, result)
         elif old is not None:
+            learned = f". Learned from: {c['origin_event']}" if c["origin_event"] else ""
+            reason = change + learned + (_related(conn, event_id, trig, facts, key) or ".")
             for title in json.loads(c["tasks"] or "[]") or [f"{c['title']}: {c['action'] or 'review'}"]:
-                learned = f" Learned from: {c['origin_event']}." if c["origin_event"] else ""
-                added = _add_alert(conn, event_id, title, change + "." + learned, new["id"], c["id"])
+                added = _add_alert(conn, event_id, title, reason, new["id"], c["id"])
                 if added:
                     result["added"].append(added)
 
@@ -322,15 +323,36 @@ def cascade(conn, event_id, new, old):
     return result
 
 
-def _season_consideration(conn, event_id, c, season, new, old, result):
+def _related(conn, event_id, trig, facts, changed_key):
+    """'. Check against: <related facts>. Tasks that may be affected: <titles>' for a consideration.
+
+    The related facts come from the spreadsheet's 'Related facts' column; the tasks are
+    the open checklist tasks that depend on any of them. Empty when none are listed.
+    """
+    keys = [k for k in trig.get("related", []) if k != changed_key]
+    if not keys:
+        return ""
+    values = [f"{label(k)} = {fmt(facts[k]['value'], facts[k]['unit']) if k in facts else 'not on file yet'}"
+              for k in keys]
+    rows = conn.execute(
+        f"""SELECT t.title, tt.depends_on FROM tasks t JOIN task_templates tt ON tt.id = t.template_id
+            WHERE t.event_id = ? AND t.status IN {OPEN} ORDER BY t.id""", (event_id,)).fetchall()
+    titles = [r["title"] for r in rows if set(keys) & set(json.loads(r["depends_on"]))]
+    text = f". Check against: {'; '.join(values)}"
+    return text + (f". Tasks that may be affected: {'; '.join(titles)}" if titles else "")
+
+
+def _season_consideration(conn, event_id, c, trig, facts, new, old, result):
     """Add a season's lessons when the date lands in it; flag them when it moves out."""
+    season = trig["season"]
     now, before = _date(new["value"]), _date(old["value"]) if old else None
     if not now:
         return
     is_in, was_in = _season(now) == season, bool(before) and _season(before) == season
     learned = f" Learned from: {c['origin_event']}." if c["origin_event"] else ""
     if is_in and not was_in:
-        reason = f"Added because the event date ({show_date(now)}) is in {season}.{learned} ({_cite(conn, new)})"
+        reason = (f"Added because the event date ({show_date(now)}) is in {season}.{learned} ({_cite(conn, new)})"
+                  + _related(conn, event_id, trig, facts, new["key"]))
         for title in json.loads(c["tasks"] or "[]"):
             added = _add_alert(conn, event_id, title, reason, new["id"], c["id"])
             if added:
